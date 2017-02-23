@@ -1,0 +1,4 @@
+git+https://bitbucket.org/bmmalone/misc.git#egg=misc
+git+https://github.com/mlindauer/ASlibScenario
+git+https://github.com/automl/auto-sklearn.git@development#egg=autosklearn
+.
