@@ -9,8 +9,8 @@ import yaml
 
 import sklearn.cross_validation
 import sklearn.pipeline
+import sklearn.preprocessing
 
-from autosklearn.regression import AutoSklearnRegressor
 from aslib_scenario.aslib_scenario import ASlibScenario
 
 import misc.automl_utils as automl_utils
@@ -44,6 +44,13 @@ def _get_pipeline(args, config, scenario):
 
     fs = ('feature_set', feature_set_selector)
     pipeline_steps.append(fs)
+
+    # handling missing values
+    imputer_strategy = config.get('imputer_strategy', 'mean')
+    imputer = sklearn.preprocessing.Imputer(strategy=imputer_strategy)
+    imputer = ('imputer', imputer)
+    pipeline_steps.append(imputer)
+
     
     # TODO: optionally, we may standardize the data
     #if args.standarize:
@@ -51,18 +58,8 @@ def _get_pipeline(args, config, scenario):
     #    pipeline_steps.append(s)
 
     # then we use the auto-sklearn options
-        
-    regressor = AutoSklearnRegressor(
-        time_left_for_this_task=args.total_training_time,
-        per_run_time_limit=args.iteration_time_limit,
-        ensemble_size=args.ensemble_size,
-        ensemble_nbest=args.ensemble_nbest,
-        seed=args.seed,
-        include_estimators=args.estimators,
-        tmp_folder=args.tmp
-    )
-    regressor = automl_utils.AutoML(autosklearn_model=regressor)
-
+    regressor = automl_utils.AutoML()
+    regressor.create_regressor(args)
     r = ('automl', regressor)
     pipeline_steps.append(r)
 
@@ -124,25 +121,17 @@ def main():
 
     msg = "Extracting solver and fold performance data"
     logger.info(msg)
-    testing, training = scenario.get_split(args.fold)
-
-    X_train = training.feature_data
     
+    testing, training = scenario.get_split(args.fold)
+    X_train = training.feature_data
     y_train = training.performance_data[args.solver].values
-    #y_train=np.ascontiguousarray(y_train)
 
     # fit the pipeline on X_train and y_train
-    pl_fit = pipeline.fit(X_train, y_train)
+    pipeline = pipeline.fit(X_train, y_train)
 
-    for i in pl_fit.steps:
-        print(i)
-
-    msg = "Writing auto-sklearn ensemble to disk: {}".format(args.out)
+    msg = "Writing fit pipeline to disk: {}".format(args.out)
     logger.info(msg)
-    #automl = pl_fit.named_steps['automl']
-    #automl_utils.write_automl(automl, args.out)
-
-    joblib.dump(pl_fit, args.out)
+    joblib.dump(pipeline, args.out)
 
 if __name__ == '__main__':
     main()
