@@ -2,8 +2,10 @@
 
 import argparse
 
+import joblib
 import numpy as np
 import pandas as pd
+import yaml
 
 import sklearn.cross_validation
 import sklearn.pipeline
@@ -15,22 +17,33 @@ import misc.automl_utils as automl_utils
 import misc.math_utils as math_utils
 import misc.utils as utils
 
+from misc.column_selector import ColumnSelector
+
 import logging
 import misc.logging_utils as logging_utils
 logger = logging.getLogger(__name__)
 
-def get_pipeline(args):
+def _get_pipeline(args, config, scenario):
     pipeline_steps = []
 
-    # TODO: create the feature filter
-    # the first step in the pipeline is filtering the forbidden features
-    #feature_set_selector = bn_portfolio_utils.ColumnSelector(
-    #    feature_set_fields, 
-    #    transform_contiguous=True
-    #)
+    # find the allowed features
+    allowed_features = scenario.features
+    allowed_feature_groups = config.get('allowed_feature_groups', [])
+    if len(allowed_feature_groups) > 0:
+        allowed_features = [
+            scenario.feature_group_dict[feature_group]['provides']
+                for feature_group in allowed_feature_groups
+        ]
+        
+        allowed_features = utils.flatten_lists(allowed_features)
 
-    #fs = ('feature_set', feature_set_selector)
-    #pipeline_steps.append(fs)
+    feature_set_selector = ColumnSelector(
+        allowed_features, 
+        transform_contiguous=True
+    )
+
+    fs = ('feature_set', feature_set_selector)
+    pipeline_steps.append(fs)
     
     # TODO: optionally, we may standardize the data
     #if args.standarize:
@@ -48,6 +61,7 @@ def get_pipeline(args):
         include_estimators=args.estimators,
         tmp_folder=args.tmp
     )
+    regressor = automl_utils.AutoML(autosklearn_model=regressor)
 
     r = ('automl', regressor)
     pipeline_steps.append(r)
@@ -83,6 +97,13 @@ def main():
 
     math_utils.check_range(args.fold, 1, 10, variable_name="fold")
 
+    if args.config is not None:
+        msg = "Reading config file"
+        logger.info(msg)
+        config = yaml.load(open(args.config))
+    else:
+        config = {}
+
     msg = "Reading ASlib scenario"
     logger.info(msg)
     scenario = ASlibScenario()
@@ -99,26 +120,29 @@ def main():
 
     msg = "Constructing pipeline"
     logger.info(msg)
-    pipeline = get_pipeline(args)
+    pipeline = _get_pipeline(args, config, scenario)
 
     msg = "Extracting solver and fold performance data"
     logger.info(msg)
     testing, training = scenario.get_split(args.fold)
 
-    X_train = training.feature_data.values
+    X_train = training.feature_data
+    
     y_train = training.performance_data[args.solver].values
-
-    X_train=np.ascontiguousarray(X_train)
-    y_train=np.ascontiguousarray(y_train)
+    #y_train=np.ascontiguousarray(y_train)
 
     # fit the pipeline on X_train and y_train
     pl_fit = pipeline.fit(X_train, y_train)
 
-    automl = pl_fit.named_steps['automl']
+    for i in pl_fit.steps:
+        print(i)
 
     msg = "Writing auto-sklearn ensemble to disk: {}".format(args.out)
     logger.info(msg)
-    automl_utils.write_automl(automl, args.out)
+    #automl = pl_fit.named_steps['automl']
+    #automl_utils.write_automl(automl, args.out)
+
+    joblib.dump(pl_fit, args.out)
 
 if __name__ == '__main__':
     main()
