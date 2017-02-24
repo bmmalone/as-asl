@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import yaml
 
-import sklearn.cross_validation
 import sklearn.pipeline
 import sklearn.preprocessing
 
@@ -47,17 +46,46 @@ def _get_pipeline(args, config, scenario):
 
     # handling missing values
     imputer_strategy = config.get('imputer_strategy', 'mean')
+
+    if imputer_strategy not in automl_utils.imputer_strategies:
+        imputer_strategies_str = ','.join(automl_utils.imputer_strategies)
+        msg = ("[train-auto-sklearn]: The imputer strategy is not allowed. "
+            "given: {}. allowed: {}".format(imputer_strategy, 
+            imputer_strategies_str))
+        raise ValueError(msg)
+
+    msg = ("[train-auto-sklearn]: Using imputation strategy: {}".format(
+        imputer_strategy))
+    logger.debug(msg)
+
     imputer = sklearn.preprocessing.Imputer(strategy=imputer_strategy)
     imputer = ('imputer', imputer)
     pipeline_steps.append(imputer)
 
-    
-    # TODO: optionally, we may standardize the data
-    #if args.standarize:
-    #    s = ('scaler', sklearn.preprocessing.StandardScaler())
-    #    pipeline_steps.append(s)
+    # optionally, check if we want to preprocess
+    preprocessing_strategy = config.get('preprocessing_strategy', None)
+    if preprocessing_strategy == 'scale':
+        msg = ("[train-auto-sklearn]: Adding standard scaler (zero mean, unit "
+            "variance) for preprocessing")
+        logger.debug(msg)
+
+        s = ('scaler', sklearn.preprocessing.StandardScaler())
+        pipeline_steps.append(s)
+    elif preprocessing_strategy is None:
+        # no preprocessing is fine
+        pass
+    else:
+        msg = ("[train-auto-sklearn]: The preprocessing strategy is not "
+            "recognized. given: {}".format(preprocessing_strategy))
+        raise ValueError(msg)
 
     # then we use the auto-sklearn options
+
+    # in order to match with AutoFolio, check if we have wallclock_limit in the
+    # config file
+    args.total_training_time = config.get("wallclock_limit", 
+        args.total_training_time)
+
     regressor = automl_utils.AutoML()
     regressor.create_regressor(args)
     r = ('automl', regressor)
@@ -70,9 +98,11 @@ def _get_pipeline(args, config, scenario):
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description="This script trains models using autosklearn. It then "
-        "writes them to disk. Importantly, it *does not* collect any statistics, "
-        "make predictions, etc.")
+        description="This script trains a model to predict the runtime for a "
+        "solver from an ASlib scenario using autosklearn. It assumes an "
+        "\"outer\" cross-validation strategy, and it only trains a model for "
+        "the indicated fold. It then writes the learned model to disk. It "
+        "*does not* collect any statistics, make predictions ,etc.")
 
     parser.add_argument('scenario', help="The ASlib scenario")
     
