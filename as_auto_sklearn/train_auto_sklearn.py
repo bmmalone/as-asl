@@ -1,10 +1,15 @@
 #! /usr/bin/env python3
 
 import argparse
-
+import ctypes
+import itertools
 import joblib
 import numpy as np
+import os
 import pandas as pd
+import shlex
+import string
+import sys
 import yaml
 
 import sklearn.pipeline
@@ -14,6 +19,8 @@ from aslib_scenario.aslib_scenario import ASlibScenario
 
 import misc.automl_utils as automl_utils
 import misc.math_utils as math_utils
+import misc.parallel as parallel
+import misc.shell_utils as shell_utils
 import misc.utils as utils
 
 from misc.column_selector import ColumnSelector
@@ -22,7 +29,24 @@ import logging
 import misc.logging_utils as logging_utils
 logger = logging.getLogger(__name__)
 
+default_num_cpus = 1
+default_num_blas_cpus = 1
+
 def _get_pipeline(args, config, scenario):
+    """ Create the pipeline which will later be trained to predict runtimes.
+
+    Parameters
+    ----------
+    args: argparse.Namespace
+        The options for training the autosklearn regressor
+
+    config: dict-like
+        Other configuration options, such as whether to preprocess the data
+
+    scenario: ASlibScenario
+        The scenario. *N.B.* This is only used to get the feature names and
+        grouping. No information is "leaked" to the pipeline.
+    """
     pipeline_steps = []
 
     # find the allowed features
@@ -86,9 +110,9 @@ def _get_pipeline(args, config, scenario):
     args.total_training_time = config.get("wallclock_limit", 
         args.total_training_time)
 
-    regressor = automl_utils.AutoML()
+    regressor = automl_utils.AutoSklearnWrapper()
     regressor.create_regressor(args)
-    r = ('automl', regressor)
+    r = ('auto_sklearn', regressor)
     pipeline_steps.append(r)
 
     # and create the pipeline
@@ -96,33 +120,120 @@ def _get_pipeline(args, config, scenario):
 
     return pipeline
 
+def _outer_cv(solver_fold, args, config):
+
+    solver, fold = solver_fold
+
+    # there are problems serializing the aslib scenario, so just read it again
+    scenario = ASlibScenario()
+    scenario.read_scenario(args.scenario)
+     
+    msg = "Solver: {}, Fold: {}".format(solver, fold)
+    logger.info(msg)
+
+    msg = "Constructing template pipeline"
+    logger.info(msg)
+    pipeline = _get_pipeline(args, config, scenario)
+
+    msg = "Extracting solver and fold performance data"
+    logger.info(msg)
+    
+    testing, training = scenario.get_split(fold)
+    X_train = training.feature_data
+    y_train = training.performance_data[solver].values
+    
+    msg = "Fitting the pipeline"
+    logger.info(msg)
+    pipeline = pipeline.fit(X_train, y_train)
+
+    out = string.Template(args.out)
+    out = out.substitute(solver=solver, fold=fold)
+
+    msg = "Writing fit pipeline to disk: {}".format(out)
+    logger.info(msg)
+    joblib.dump(pipeline, out)
+
+    return pipeline
+
+
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         description="This script trains a model to predict the runtime for a "
         "solver from an ASlib scenario using autosklearn. It assumes an "
         "\"outer\" cross-validation strategy, and it only trains a model for "
-        "the indicated fold. It then writes the learned model to disk. It "
-        "*does not* collect any statistics, make predictions ,etc.")
+        "the indicated folds and solvers. It then writes the learned model to "
+        "disk. It *does not* collect any statistics, make predictions ,etc.")
 
     parser.add_argument('scenario', help="The ASlib scenario")
     
-    parser.add_argument('solver', help="The solver for which models will be "
-        "learned")
-
-    parser.add_argument('fold', help="The fold for which a model wil be learned",
-        type=int)
-
-    parser.add_argument('out', help="The output (pickle) file")
+    parser.add_argument('out', help="A template string for the filenames for "
+        "the learned models. They are written with joblib.dump, so they need "
+        "to be read back in with joblib.load. ${solver} and ${fold} are the "
+        "template part of the string. It is probably necessary to surround "
+        "this argument with single quotes in order to prevent shell "
+        "replacement of the template parts.")
 
     parser.add_argument('--config', help="A (yaml) config file which specifies "
         "options controlling the learner behavior")
+
+    parser.add_argument('--solvers', help="The solvers for which models will "
+        "be learned. By default, models for all solvers are learned", 
+        nargs='*', default=[])
+
+    parser.add_argument('--folds', help="The outer-cv folds for which a model "
+        "will be learned. By default, models for all folds are learned", 
+        type=int, nargs='*', default=[])
+
+    parser.add_argument('-p', '--num-cpus', help="The number of CPUs to use "
+        "for parallel solver/fold training", type=int, 
+        default=default_num_cpus)
+    
+    parser.add_argument('--num-blas-threads', help="The number of threads to "
+        "use for parallelizing BLAS. The total number of CPUs will be "
+        "\"num_cpus * num_blas_cpus\". Currently, this flag only affects "
+        "OpenBLAS and MKL.", type=int, default=default_num_blas_cpus)
+
+    parser.add_argument('--do-not-update-env', help="By default, num-blas-threads "
+        "requires that relevant environment variables are updated. Likewise, "
+        "if num-cpus is greater than one, it is necessary to turn off python "
+        "assertions due to an issue with multiprocessing. If this flag is "
+        "present, then the script assumes those updates are already handled. "
+        "Otherwise, the relevant environment variables are set, and a new "
+        "processes is spawned with this flag and otherwise the same "
+        "arguments. This flag is not inended for external users.",
+        action='store_true')
 
     automl_utils.add_automl_options(parser)
     logging_utils.add_logging_options(parser)
     args = parser.parse_args()
     logging_utils.update_logging(args)
 
-    math_utils.check_range(args.fold, 1, 10, variable_name="fold")
+    # see which folds to run
+    folds = args.folds
+    if len(folds) == 0:
+        folds = range(1, 11)
+
+    for f in folds:
+        math_utils.check_range(f, 1, 10, variable_name="fold")
+
+    # and which solvers
+    msg = "Reading ASlib scenario"
+    logger.info(msg)
+    scenario = ASlibScenario()
+    scenario.read_scenario(args.scenario)
+
+    # ensure the selected solver is present
+    solvers = args.solvers
+    if len(solvers) == 0:
+        solvers = scenario.algorithms
+
+    for solver in solvers:
+        if solver not in scenario.algorithms:
+            solver_str = ','.join(scenario.algorithms)
+            msg = ("[train-auto-sklear]: the solver is not present in the "
+                "ASlib scenario. given: {}. choices: {}".format(solver, 
+                solver_str))
+            raise ValueError(msg)
 
     if args.config is not None:
         msg = "Reading config file"
@@ -131,37 +242,57 @@ def main():
     else:
         config = {}
 
-    msg = "Reading ASlib scenario"
-    logger.info(msg)
-    scenario = ASlibScenario()
-    scenario.read_scenario(args.scenario)
+    # everything is present, so update the environment variables and spawn a
+    # new process, if necessary
+    if not args.do_not_update_env:
+        ###
+        #
+        # There is a lot going on with settings these environment variables.
+        # please see the following references:
+        #
+        #   Turning off assertions so we can parallelize sklearn across
+        #   multiple CPUs for different solvers/folds
+        #       https://github.com/celery/celery/issues/1709
+        #
+        #   Controlling OpenBLAS threads
+        #       https://github.com/automl/auto-sklearn/issues/166
+        #
+        #   Other environment variables controlling thread usage
+        #       http://stackoverflow.com/questions/30791550
+        #
+        ###
+        
+        # we only need to turn off the assertions if we parallelize across cpus
+        if args.num_cpus > 1:
+            os.environ['PYTHONOPTIMIZE'] = "1"
 
-    # ensure the selected solver is present
-    if args.solver not in scenario.algorithms:
-        msg = ("[train-auto-sklear]: the solver '{}' is not present in the "
-            "ASlib scenario".format(args.solver))
-        raise ValueError(msg)
+        # openblas
+        os.environ['OPENBLAS_NUM_THREADS'] = str(args.num_blas_threads)
+        
+        # mkl blas
+        os.environ['MKL_NUM_THREADS'] = str(args.num_blas_threads)
+
+        # other stuff from the SO post
+        os.environ['OMP_NUM_THREADS'] = str(args.num_blas_threads)
+        os.environ['NUMEXPR_NUM_THREADS'] = str(args.num_blas_threads)
+
+        cmd = ' '.join(shlex.quote(a) for a in sys.argv)
+        cmd += " --do-not-update-env"
+        shell_utils.check_call(cmd)
+        return
+
+    msg = "Learning regressors"
+    logger.info(msg)
+
+    it = itertools.product(solvers, folds)
+    regressors = parallel.apply_parallel_iter(
+        it,
+        args.num_cpus,
+        _outer_cv,
+        args,
+        config,
+        progress_bar=True
+    )
     
-    msg = "Solver: {}, Fold: {}".format(args.solver, args.fold)
-    logger.info(msg)
-
-    msg = "Constructing pipeline"
-    logger.info(msg)
-    pipeline = _get_pipeline(args, config, scenario)
-
-    msg = "Extracting solver and fold performance data"
-    logger.info(msg)
-    
-    testing, training = scenario.get_split(args.fold)
-    X_train = training.feature_data
-    y_train = training.performance_data[args.solver].values
-
-    # fit the pipeline on X_train and y_train
-    pipeline = pipeline.fit(X_train, y_train)
-
-    msg = "Writing fit pipeline to disk: {}".format(args.out)
-    logger.info(msg)
-    joblib.dump(pipeline, args.out)
-
 if __name__ == '__main__':
     main()
