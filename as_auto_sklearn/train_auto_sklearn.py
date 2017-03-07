@@ -157,6 +157,9 @@ def _outer_cv(solver_fold, args, config):
     testing, training = scenario.get_split(fold)
     X_train = training.feature_data
     y_train = training.performance_data[solver].values
+
+    if 'log_performance_data' in config:
+        y_train = np.log1p(y_train)
     
     msg = "Fitting the pipeline"
     logger.info(msg)
