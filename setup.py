@@ -10,7 +10,9 @@ import subprocess
 
 logger = logging.getLogger(__name__)
 
-console_scripts = []
+console_scripts = [
+    'train-as-auto-sklearn=as_auto_sklearn.train_as_auto_sklearn:main'
+]
 
 external_requirements = [
     'cython',
@@ -23,7 +25,7 @@ external_requirements = [
     'tqdm',
     'seaborn',
     'misc', # handled by requirements.txt now
-    'autosklearn' # handled by requirements.txt
+    'auto-sklearn' # handled by requirements.txt
 ]
 
 def _post_install(self):
