@@ -24,6 +24,7 @@ import misc.shell_utils as shell_utils
 import misc.utils as utils
 
 from misc.column_selector import ColumnSelector
+from misc.column_selector import ColumnTransformer
 
 import logging
 import misc.logging_utils as logging_utils
@@ -60,23 +61,33 @@ def _get_pipeline(args, config, scenario):
         
         allowed_features = utils.flatten_lists(allowed_features)
 
-    feature_set_selector = ColumnSelector(
-        allowed_features, 
-        transform_contiguous=True
-    )
+    feature_set_selector = ColumnSelector(allowed_features)
 
     fs = ('feature_set', feature_set_selector)
     pipeline_steps.append(fs)
+    
+    # check for taking the log
+    if 'fields_to_log' in config:
+        # then make sure all of the fields are in the scenario
+        fields_to_log = config['fields_to_log']
+        missing_fields = [f for f in fields_to_log if f not in scenario.features]
+        if len(missing_fields) > 0:
+            missing_fields_str = ",".join(missing_fields)
+            msg = ("[train-auto-sklearn]: Could not find the following fields "
+                "to log: {}".format(missing_fields_str))
+            raise ValueError(msg)
+
+        log_transformer = ColumnTransformer(fields_to_log, np.log1p)
+        log_transformer = ('log_transformer', log_transformer)
+        pipeline_steps.append(log_transformer)
 
     # handling missing values
     imputer_strategy = config.get('imputer_strategy', 'mean')
-
-    if imputer_strategy not in automl_utils.imputer_strategies:
-        imputer_strategies_str = ','.join(automl_utils.imputer_strategies)
-        msg = ("[train-auto-sklearn]: The imputer strategy is not allowed. "
-            "given: {}. allowed: {}".format(imputer_strategy, 
-            imputer_strategies_str))
-        raise ValueError(msg)
+    automl_utils.check_imputer_strategy(
+        imputer_strategy,
+        raise_error=True,
+        error_prefix="[train-auto-sklearn]: "
+    )
 
     msg = ("[train-auto-sklearn]: Using imputation strategy: {}".format(
         imputer_strategy))
@@ -102,6 +113,11 @@ def _get_pipeline(args, config, scenario):
         msg = ("[train-auto-sklearn]: The preprocessing strategy is not "
             "recognized. given: {}".format(preprocessing_strategy))
         raise ValueError(msg)
+
+    # last, we need to convert it to a "contiguous" array
+    ct = sklearn.preprocessing.FunctionTransformer(np.ascontiguousarray)
+    ct = ("contiguous_transformer", ct)
+    pipeline_steps.append(ct)
 
     # then we use the auto-sklearn options
 
