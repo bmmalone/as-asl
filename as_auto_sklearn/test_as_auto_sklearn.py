@@ -111,7 +111,7 @@ def main():
     msg = "Writing predictions to disk"
     logger.info(msg)
 
-    utils.write_df(pred_df, args.out, index=False)
+    utils.write_df(all_predictions, args.out, index=False)
 
 if __name__ == '__main__':
     main()
