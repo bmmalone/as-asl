@@ -70,7 +70,7 @@ def readme():
         return f.read()
 
 setup(name='as_auto_sklearn',
-        version='0.0.1',
+        version='1.0.0',
         description="This project incorporates the auto-sklearn toolkit into "
             "a solver runtime prediction framework. The predictions directly "
             "yield a solution to the algorithm selection problem.",
