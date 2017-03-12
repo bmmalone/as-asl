@@ -10,4 +10,5 @@ git+https://github.com/mlindauer/ASlibScenario
 sphinx_bootstrap_theme
 git+https://bitbucket.org/bmmalone/misc.git#egg=misc
 git+https://github.com/automl/auto-sklearn.git#egg=autosklearn
+git+https://github.com/mlindauer/AutoFolio.git#egg=autofolio
 .
