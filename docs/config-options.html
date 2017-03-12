@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<h1 id="configuration-options-for-as-auto-sklearn">Configuration options for as-auto-sklearn</h1>
+<p>The training and testing scripts both accept a yaml configuration file. This document describes the available options and their effects.</p>
+<p>The configuration file can contain other keys and values (such as those used by AutoFolio), but they will be ignored.</p>
+<ul>
+<li><p><code>wallclock_limit</code>. The amount of time (in seconds) to use for training one fold of one solver</p></li>
+<li><p><code>allowed_feature_groups</code>. A list of feature groups included in training (and testing). The strings must exactly match the keys of the feature_steps in the description of the aslib scenario.</p></li>
+<li><p><code>imputer_strategy</code>. The approach to use for replacing missing values. The same strategy is applied to all features. Valid values are:</p>
+<ul>
+<li><code>median</code></li>
+<li><code>mean</code></li>
+<li><code>most_frequent</code></li>
+</ul></li>
+<li><p><code>preprocessing_strategy</code>. The approach to use for preprocessing the data. <strong>N.B.</strong> auto-sklearn already learns “optimal” strategies for preprocessing, so sophisticated methods are not sensible for this option. Valid values are:</p>
+<ul>
+<li><p><code>scale</code>. Value for each feature are scaled such that the values of the feature have a mean of 0 and a variance of 1.</p></li>
+<li><p><code>null</code>. No preprocessing is applied.</p></li>
+</ul></li>
+<li><p><code>log_performance_data</code>. If this key is present with any value (even something like “no” or “False”), then the performance data (that is, the solver runtimes) will be transformed with <code>np.log1p</code> before training. After testing, the predictions will be transformed back using <code>np.exp1m</code>. The predictions reported with <code>test-as-auto-sklearn</code> will be in “normal” (not logged) space.<br />
+<strong>N.B.</strong> auto-sklearn <em>does not</em> attempt to optimize taking the logarithm of input features, so it is reasonable to choose these by hand.</p></li>
+<li><p><code>fields_to_log</code>. A list of features to transform using <code>np.log1p</code> before training. This is implemented as part of an <code>sklearn.Pipeline</code>, so the same transformations will be applied during testing.</p></li>
+</ul>
+</body>
+</html>
