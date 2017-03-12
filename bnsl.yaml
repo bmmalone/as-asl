@@ -1,0 +1,52 @@
+# limit for each "outer" cv fold
+wallclock_limit: 120
+
+# allowed feature groups (problem-specific)
+allowed_feature_groups:
+  - basic
+  - basic_extended
+  - lower_bounding
+  #- greedy_probing
+  #- A*_probing
+  #- CP_probing
+  #- ILP_probing
+
+# as-autosklearn configuration
+
+# missing values
+imputer_strategy: 'median'
+#imputer_strategy: 'mean'
+#imputer_strategy: 'most_frequent'
+
+# preprocessing
+preprocessing_strategy: 'scale'
+
+# if this is present with any value (even something like "no" or "False"), then
+# the logarithm of the performance data will be used for training and testing
+log_performance_data: True
+
+fields_to_log:
+  - "POPS-Count"
+  - "VPOPS-Maximum"
+  - "VPOPS-Mean"
+  - "VPOPS-Standard-Deviation"
+  - "PSS-Maximum"
+  - "PSS-Mean"
+  - "PSS-Standard-Deviation"
+
+# autofolio configuration
+
+# preprocessing strategies
+pca: False
+impute: True
+scale: True
+
+# use ASPeed to find a presolving schedule?
+presolve: False
+
+# pairwise classifiers
+random_forest_classifier: True
+xgboost_classifier: True
+
+# pairwise regressors
+random_forest_regressor: True

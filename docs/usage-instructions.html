@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<h1 id="usage-instructions-for-as-auto-sklearn">Usage instructions for as-auto-sklearn</h1>
+<p>This document elaborates on the command line options for each step in the as-auto-sklearn pipeline for runtime prediction and algorithm selection.</p>
+<ul>
+<li><p><a href="#training">Training</a></p></li>
+<li><p><a href="#testing">Testing</a></p></li>
+<li><p><a href="#validation">Validation</a></p></li>
+</ul>
+<h2 id="training">Training</h2>
+<p>The <code>train-as-auto-sklearn</code> script is used to train <a href="https://github.com/automl/auto-sklearn">auto-sklearn</a> models for runtime prediction (and, later, algorithm selection). The script creates a pipeline based on configuration options to first clean the input (ASlib scenario) data; the early steps in the pipeline include things like taking the logarithm of the runtime predictions and removing forbidden features. The final step in the pipeline is always the auto-sklearn regressor.</p>
+<p>The command line options for the <code>train</code> script control things like the number of CPUs and file paths. Please see the <a href="config-options.html">configuration options</a> for more details about the preprocessing pipeline behavior.</p>
+<pre><code>train-as-auto-sklearn &lt;scenario&gt; &lt;out&gt; [--config &lt;config&gt;] [--solvers &lt;solver_1&gt; ...] [--folds &lt;fold_1&gt; ...] [-p/--num-cpus &lt;num_cpus&gt;] [--num-blas-thread &lt;num_blas_threads&gt;] [--do-not-update-env]</code></pre>
+<h3 id="command-line-options">Command line options</h3>
+<ul>
+<li><p><code>scenario</code>. The ASlib scenario. This must be the path to the folder which includes the various ASlib files. For example, if the path to the description file is <code>/path/to/my/aslib_scenario/description.txt</code>, then this value should be <code>/path/to/my/aslib_scenario</code>.</p></li>
+<li><p><code>out</code>. A template string for the filenames for the learned models. They are written with joblib.dump, so they need to be read back in with joblib.load. <code>${solver}</code> and <code>${fold}</code> are the “template” part of the string. It is probably necessary to surround this argument with single quotes in order to prevent shell replacement of the template parts.</p></li>
+<li><p>[<code>--config</code>]. A (yaml) config file which specifies options controlling the learner behavior. Please see the <a href="config-options.html">configuration options</a> for more details.</p></li>
+<li><p>[<code>--solvers</code>]. The solvers for which models will be learned. By default, models for all solvers are learned. The names must match those in the ASlib scenario. Default: all</p></li>
+<li><p>[<code>--folds</code>]. The outer-cv folds for which a model will be learned. By default, models for all folds are learned. The total set of models learned is the cross-product of <code>solvers</code> and <code>folds</code>. Default: all</p></li>
+<li><p>[<code>-p/--num-cpus</code>]. The number of CPUs to use for parallel (solver, fold) training. Default: 1</p></li>
+<li><p>[<code>--num-blas-threads</code>]. The number of threads for parallelizing BLAS operations, which are used by many of the models included in auto-sklearn. The total number of CPUs will be <code>num_cpus * num_blas_cpus</code>. This option is implemented in a “best guess” approach. Currently, it is only expected to affect OpenBLAS and MKL. Please see the source code for more details. Default: 1</p></li>
+<li><p>[<code>--do-not-update-env</code>]. <strong>N.B.</strong> This flag is mostly used to control internal behavior, and it should not be used by external users.<br />
+By default, <code>num-blas-threads</code> requires that relevant environment variables are updated. Likewise, if <code>num-cpus</code> is greater than one, it is necessary to turn off python assertions due to an issue with multiprocessing. If this flag is present, then the script assumes those updates are already handled. Otherwise, the relevant environment variables are set, and a new processes is spawned with this flag and otherwise the same arguments. This flag is not intended for external users.</p></li>
+</ul>
+<h2 id="testing">Testing</h2>
+<p>The <code>test-as-auto-sklearn</code> script tests the models learned during the training phase. Importantly, the training-testing strategy uses an “outer” cross-validation strategy, so testing data is never seen during training.</p>
+<h3 id="command-line-options-1">Command line options</h3>
+<ul>
+<li><p><code>scenario</code>. The ASlib scenario. This must be the path to the folder which includes the various ASlib files. For example, if the path to the description file is <code>/path/to/my/aslib_scenario/description.txt</code>, then this value should be <code>/path/to/my/aslib_scenario</code>.</p></li>
+<li><p><code>model_template</code>. A template string for the filenames for the learned models. This must match the <code>out</code> parameter used in training. It is probably necessary to surround this argument with single quotes in order to prevent shell replacement of the template parts.</p></li>
+<li><p><code>out</code>. The predictions, in gzipped csv format. They are in the form of a “long” data frame with fields described below.</p></li>
+<li><p>[<code>--config</code>]. A (yaml) config file which specifies options controlling the learner behavior. Please see the <a href="config-options.html">configuration options</a> for more details.</p></li>
+</ul>
+<h4 id="output-format">Output format</h4>
+<p>The following fields are present in the output file.</p>
+<ul>
+<li><code>instance_id</code>. The name of the instance, from the ASlib scenario</li>
+<li><code>solver</code>. The solver for which the prediction is made</li>
+<li><code>fold</code>. The fold in which the instance is assigned in the ASlib scenario</li>
+<li><code>actual</code>. The true runtime of the solver on the instance</li>
+<li><code>predicted</code>. The predicted runtime of the instance on the solver using the learned models.</li>
+</ul>
+<h2 id="validation">Validation</h2>
+<p>The <code>validate-as-auto-sklearn</code> script uses the predictions from the <code>test</code> script and the <code>Validator</code> class from <code>autofolio</code> to evaluate the algorithm selection behavior based on the predictions.</p>
+<p>Currently, the <code>validate</code> script only writes the evaluation to the screen, but this may change depending on the <code>Validator</code> implementation.</p>
+<h3 id="command-line-options-2">Command line options</h3>
+<ul>
+<li><p><code>scenario</code>. The ASlib scenario. This must be the path to the folder which includes the various ASlib files. For example, if the path to the description file is <code>/path/to/my/aslib_scenario/description.txt</code>, then this value should be <code>/path/to/my/aslib_scenario</code>.</p></li>
+<li><p><code>predictions</code>. The predictions from the <code>test</code> script.</p></li>
+<li><p>[<code>--config</code>]. A (yaml) config file which specifies options controlling the learner behavior. Please see the <a href="config-options.html">configuration options</a> for more details. This is primarily used to calculate the time for feature extraction.</p></li>
+</ul>
+</body>
+</html>

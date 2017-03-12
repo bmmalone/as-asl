@@ -10,7 +10,11 @@ import subprocess
 
 logger = logging.getLogger(__name__)
 
-console_scripts = []
+console_scripts = [
+    'train-as-auto-sklearn=as_auto_sklearn.train_as_auto_sklearn:main',
+    'test-as-auto-sklearn=as_auto_sklearn.test_as_auto_sklearn:main',
+    'validate-as-auto-sklearn=as_auto_sklearn.validate_as_auto_sklearn:main'
+]
 
 external_requirements = [
     'cython',
@@ -23,7 +27,8 @@ external_requirements = [
     'tqdm',
     'seaborn',
     'misc', # handled by requirements.txt now
-    'autosklearn' # handled by requirements.txt
+    'auto-sklearn', # handled by requirements.txt
+    'autofolio'
 ]
 
 def _post_install(self):
@@ -65,7 +70,7 @@ def readme():
         return f.read()
 
 setup(name='as_auto_sklearn',
-        version='0.0.1',
+        version='1.0.0',
         description="This project incorporates the auto-sklearn toolkit into "
             "a solver runtime prediction framework. The predictions directly "
             "yield a solution to the algorithm selection problem.",
