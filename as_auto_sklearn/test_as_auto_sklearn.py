@@ -33,8 +33,8 @@ def main():
 
     parser.add_argument('out', help="The output csv file")
 
-    parser.add_argument('--config', help="A (yaml) config file which specifies "
-        "options controlling the learner behavior")
+    parser.add_argument('--config', help="A (yaml) config file which "
+        "specifies options controlling the learner behavior")
     
     logging_utils.add_logging_options(parser)
     args = parser.parse_args()

@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 console_scripts = [
     'train-as-auto-sklearn=as_auto_sklearn.train_as_auto_sklearn:main',
-    'test-as-auto-sklearn=as_auto_sklearn.test_as_auto_sklearn:main'
+    'test-as-auto-sklearn=as_auto_sklearn.test_as_auto_sklearn:main',
+    'validate-as-auto-sklearn=as_auto_sklearn.validate_as_auto_sklearn:main'
 ]
 
 external_requirements = [
@@ -26,7 +27,8 @@ external_requirements = [
     'tqdm',
     'seaborn',
     'misc', # handled by requirements.txt now
-    'auto-sklearn' # handled by requirements.txt
+    'auto-sklearn', # handled by requirements.txt
+    'autofolio'
 ]
 
 def _post_install(self):
