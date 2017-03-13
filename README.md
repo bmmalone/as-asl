@@ -16,7 +16,7 @@ cat requirements.txt | xargs -n 1 -L 1 pip3 install
 ### Training
 
 ```
-train-as-auto-sklearn /path/to/coseal/BNSL-2016/ 'model.${solver}.${fold}.jpkl' --total-training-time 120 --iteration-time-limit 30 --config /path/to/my/config.yaml
+train-as-auto-sklearn /path/to/coseal/BNSL-2016/ 'model.${solver}.${fold}.gz' --total-training-time 120 --iteration-time-limit 30 --config /path/to/my/config.yaml
 ```
 
 Please try `train-as-auto-sklearn -h` for more options.
@@ -24,11 +24,19 @@ Please try `train-as-auto-sklearn -h` for more options.
 ### Testing
 
 ```
-test-as-auto-sklearn /path/to/coseal/BNSL-2016/ 'model.${solver}.${fold}.jpkl bnsl-2016.predictions.csv.gz --config /path/to/my/config.yaml
+test-as-auto-sklearn /path/to/coseal/BNSL-2016/ 'model.${solver}.${fold}.gz bnsl-2016.predictions.csv.gz --config /path/to/my/config.yaml
 ```
 
 Please try `test-as-auto-sklearn -h` for more options.
 
+### Algorithm selection performance
+
+```
+validate-as-auto-sklearn /path/to/coseal/BNSL-2016/ bnsl-2016.predictions.csv.gz --config /path/to/my/config.yaml
+```
+
+Please try `validate-as-auto-sklearn -h` for more options.
+
 ---
 
-More documentation is coming soon.
+Please see the [usage instructions](docs/usage-instructions.md) and [configuration options](docs/config-options.md) for more detailed explanations of running the software.

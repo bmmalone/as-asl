@@ -23,6 +23,11 @@ Additionally, the release will ensure predictions do not differ "substantially"
 from those in the paper. Clearly, this is subjective; nevertheless, the decision
 to call the milestone "reached" will be made in good faith.
 
+## [1.0.1] - 2017-03-13
+
+This release includes only updates to documentation. It does not include any
+new features, changes of interface, etc.
+
 ## [1.0.0] - 2017-03-12
 The initial import of code from the (private) bn-portfolio repo, while removing
 the BNSL-specific dependencies. In particular, the package now works with

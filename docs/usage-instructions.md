@@ -79,6 +79,10 @@ The `test-as-auto-sklearn` script tests the models learned during the training
 phase. Importantly, the training-testing strategy uses an "outer"
 cross-validation strategy, so testing data is never seen during training.
 
+```
+test-as-auto-sklearn <scenario> <model_template> <out> [--config <config>]
+```
+
 ### Command line options
 
 * `scenario`. The ASlib scenario. This must be the path to the folder which
@@ -117,6 +121,10 @@ selection behavior based on the predictions.
 
 Currently, the `validate` script only writes the evaluation to the screen,
 but this may change depending on the `Validator` implementation.
+
+```
+validate-as-auto-sklearn <scenario> <predictions> [--config <config>]
+```
 
 ### Command line options
 
