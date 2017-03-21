@@ -21,6 +21,7 @@ external_requirements = [
     'numpy',
     'scipy',
     'pandas',
+    'joblib',
     'matplotlib',
     'sklearn',
     'docopt',
