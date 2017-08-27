@@ -1,0 +1,4 @@
+git+https://github.com/automl/auto-sklearn.git#egg=autosklearn
+git+https://github.com/mlindauer/AutoFolio.git#egg=autofolio
+git+https://github.com/bmmalone/pymisc-utils.git#egg=misc
+.
