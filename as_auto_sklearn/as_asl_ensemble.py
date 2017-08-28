@@ -1,8 +1,11 @@
 import autosklearn.metrics
 
+import joblib
 import numpy as np
 import pandas as pd
 
+
+import networkx as nx
 import sklearn.pipeline
 import sklearn.preprocessing
 from sklearn.utils.validation import check_is_fitted
@@ -230,16 +233,44 @@ class ASaslPipeline:
 
         choices = self.inverse_transform(y_pred)
 
+        # in order to ensure our schedule is valid, load all features
+        # in topo order
+        feature_dependency_graph = automl_utils.extract_feature_step_dependency_graph(scenario)
+        feature_topo_order = nx.topological_sort(feature_dependency_graph)
+
         it = zip(choices, scenario.instances)
         predictions = {}
         
         for choice, instance in it:
             if scenario.performance_type[0] == "runtime":
-                predictions[instance] = [[choice,scenario.algorithm_cutoff_time]]
+                p = [[choice,scenario.algorithm_cutoff_time]]
             elif testing.performance_type[0] == "solution_quality":
-                predictions[instance] = [(choice,999999999999)]
+                p = [(choice,999999999999)]
+
+            predictions[instance] = feature_topo_order + p
 
         return predictions
+
+    def dump(self, filename):
+        """ A convenience wrapper around joblib.dump
+        """
+        joblib.dump(self, filename)
+
+    @classmethod
+    def load(cls, filename):
+        """ A convenience wrapper around joblib.load
+        """
+        pipeline = joblib.load(filename)
+
+        # and make sure we actually read the correct type of thing
+        if not isinstance(pipeline, cls):
+            msg = ("[as_asl_ensemble.load]: the object at {} is of type {}, "
+                "but expected type was: {}".format(filename, type(pipeline),
+                cls))
+            raise TypeError(msg)
+
+        return pipeline
+
 
 
 

@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 console_scripts = [
     'train-as-auto-sklearn=as_auto_sklearn.train_as_auto_sklearn:main',
     'test-as-auto-sklearn=as_auto_sklearn.test_as_auto_sklearn:main',
-    'validate-as-auto-sklearn=as_auto_sklearn.validate_as_auto_sklearn:main'
+    'validate-as-auto-sklearn=as_auto_sklearn.validate_as_auto_sklearn:main',
+    'train-oasc-models=as_auto_sklearn.train_oasc_models:main',
+    'evaluate-oasc-models=as_auto_sklearn.evaluate_oasc_models:main'
 ]
 
 external_requirements = [

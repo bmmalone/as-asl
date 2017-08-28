@@ -58,6 +58,25 @@ def add_result_type(parser, default="result-type"):
 ###
 # S
 ###
+def add_scenario(parser, optional=False, default=None):
+    """ Add the scenario parameter to the parser
+
+    Parameters
+    ----------
+    parser: argparse.ArgumentParser
+        The parser
+
+    optional: bool
+        Whether the --scenario parameter is optional
+
+    default: string
+        If the parameter is optional, it will have this default value
+    """
+    scenario_help = "The ASlibScenario to process"
+    if optional:
+        parser.add_argument('--scenario', help=scenario_help, default=default)
+    else:
+        parser.add_argument('scenario', help=scenario_help)
 
 def add_seed(parser, default=8675309):
     """ Add a random seed parameter to the parser
