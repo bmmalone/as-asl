@@ -113,7 +113,7 @@ class Validator(object):
         ''' Constructor '''
         self.logger = logging.getLogger("Validation")
 
-    def validate_runtime(self, schedules: dict, test_scenario: ASlibScenario):
+    def validate_runtime(self, schedules: dict, test_scenario: ASlibScenario, show:bool=True):
         '''
             validate selected schedules on test instances for runtime
 
@@ -123,6 +123,8 @@ class Validator(object):
                 algorithm schedules per instance
             test_scenario: ASlibScenario
                 ASlib scenario with test instances
+            show: bool
+                whether to print the statistics after calculating them
         '''
         if test_scenario.performance_type[0] != "runtime":
             raise ValueError("Cannot validate non-runtime scenario with runtime validation method")
@@ -174,7 +176,7 @@ class Validator(object):
                 if solved and used_time <= test_scenario.algorithm_cutoff_time:
                     stat.solved += 1
                     stat.par1 += used_time
-                    self.logger.info("Solved after %f" %(used_time))
+                    self.logger.debug("Solved after %f" %(used_time))
                     break
                 elif used_time > test_scenario.algorithm_cutoff_time:
                     stat.timeouts += 1
@@ -185,11 +187,12 @@ class Validator(object):
         stat.par10 = stat.par1 + 9 * \
             test_scenario.algorithm_cutoff_time * stat.timeouts
         
-        stat.show()
+        if show:
+            stat.show()
 
         return stat
 
-    def validate_quality(self, schedules: dict, test_scenario: ASlibScenario):
+    def validate_quality(self, schedules: dict, test_scenario: ASlibScenario, show:bool=True):
         '''
             validate selected schedules on test instances for solution quality
 
@@ -199,6 +202,8 @@ class Validator(object):
                 algorithm schedules per instance
             test_scenario: ASlibScenario
                 ASlib scenario with test instances
+            show: bool
+                whether to print the statistics after calculating them
         '''
         if test_scenario.performance_type[0] != "solution_quality":
             raise ValueError("Cannot validate non-solution_quality scenario with solution_quality validation method")
@@ -233,6 +238,7 @@ class Validator(object):
             stat.par1 += perf
             stat.solved += 1
         
-        stat.show(remove_unsolvable=False)
+        if show:
+            stat.show(remove_unsolvable=False)
         
         return stat

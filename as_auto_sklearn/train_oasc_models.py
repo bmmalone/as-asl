@@ -55,6 +55,7 @@ def main():
 
     clu.add_config(parser)
     clu.add_scenario(parser)
+    clu.add_simple_presolver_options(parser)
     clu.add_num_cpus(parser)
     clu.add_cv_options(parser)
 

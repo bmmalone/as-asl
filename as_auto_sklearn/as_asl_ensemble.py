@@ -4,15 +4,18 @@ import joblib
 import numpy as np
 import pandas as pd
 
-
+import mlxtend.feature_selection
 import networkx as nx
 import sklearn.pipeline
 import sklearn.preprocessing
 from sklearn.utils.validation import check_is_fitted
 
+from as_auto_sklearn.presolver_scheduler import PresolverScheduler
+
 import misc.automl_utils as automl_utils
 from misc.nan_standard_scaler import NaNStandardScaler
 import misc.parallel as parallel
+import misc.utils as utils
 
 class ASaslEnsemble:
     def __init__(self, args, solvers):
@@ -156,12 +159,32 @@ class ASaslEnsemble:
         return y_pred
 
 class ASaslPipeline:
-    def __init__(self, args):
+    def __init__(self, args, feature_steps):
         self.args = args
+        self.feature_steps = feature_steps
 
     def fit(self, scenario):
         """ Fit the pipeline using the ASlibScenario
         """
+
+        # first, select a presolver, if any
+        self.presolver_scheduler = PresolverScheduler(
+            budget=self.args.presolver_budget,
+            min_fast_solutions=self.args.presolver_min_fast_solutions
+        )
+        self.presolver_scheduler_ = self.presolver_scheduler.fit(scenario)
+
+        self.feature_names_ = automl_utils.extract_feature_names(
+            scenario, 
+            self.feature_steps
+        )
+        self.feature_columns_ = [
+            scenario.feature_data.columns.get_loc(c)
+                for c in self.feature_names_
+        ]
+
+        feature_selector = mlxtend.feature_selection.ColumnSelector(
+            cols=self.feature_columns_)
             
         nss = NaNStandardScaler()
         as_asl_ensemble = ASaslEnsemble(
@@ -170,6 +193,7 @@ class ASaslPipeline:
         )
         
         pipeline = [
+            ('feature_selector', feature_selector),
             ('nss', nss),
             ('selector', as_asl_ensemble)
         ]
@@ -219,10 +243,11 @@ class ASaslPipeline:
         return y_transformed
 
             
-    def create_solver_schedules(self, scenario):
+    def create_solver_schedules(self, scenario, enable_presolving=True):
         """ Use the fit pipeline to create solver schedules for the scenario
         instances
         """
+        check_is_fitted(self, ["pipeline_", "presolver_scheduler_"])
 
         # currently, just take the predicted best solver
         X_test = scenario.feature_data
@@ -230,6 +255,13 @@ class ASaslPipeline:
 
         X_test = X_test.values
         y_pred = self.predict(X_test)
+
+        if enable_presolving:
+            presolver_schedules = self.presolver_scheduler_.create_presolver_schedule(scenario)
+        else:
+            presolver_schedules = {
+                instance: [None] for instance in scenario.instances
+            }
 
         choices = self.inverse_transform(y_pred)
 
@@ -239,17 +271,23 @@ class ASaslPipeline:
         feature_topo_order = nx.topological_sort(feature_dependency_graph)
 
         it = zip(choices, scenario.instances)
-        predictions = {}
+        schedules = {}
         
         for choice, instance in it:
             if scenario.performance_type[0] == "runtime":
-                p = [[choice,scenario.algorithm_cutoff_time]]
+                solver_schedule = [[choice,scenario.algorithm_cutoff_time]]
             elif testing.performance_type[0] == "solution_quality":
-                p = [(choice,999999999999)]
+                solver_schedule = [(choice,999999999999)]
 
-            predictions[instance] = feature_topo_order + p
+            schedule = utils.remove_nones(
+                presolver_schedules[instance] +
+                feature_topo_order +
+                solver_schedule
+            )
 
-        return predictions
+            schedules[instance] = schedule
+
+        return schedules
 
     def dump(self, filename):
         """ A convenience wrapper around joblib.dump

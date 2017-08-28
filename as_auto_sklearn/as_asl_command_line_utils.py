@@ -3,6 +3,7 @@
 #   parameters for the Algorithm Selection auto-sklearn wrapper project.
 ###
 
+import misc.math_utils as math_utils
 
 ###
 # C
@@ -32,8 +33,8 @@ def validate_folds_options(args):
     import misc.math_utils as math_utils
     # make sure they are all valid
     for f in args.folds:
-        math_utils.check_range(f, 0, args.num_folds, variable_name="fold", 
-            max_inclusive=False)
+        math_utils.check_range(f, 1, args.num_folds, variable_name="fold", 
+            max_inclusive=True)
 
 
 ###
@@ -45,6 +46,38 @@ def add_num_cpus(parser, default=1):
     """
     parser.add_argument('--num-cpus', help="The number of CPUs to use",
         type=int, default=default)
+###
+# Presolve
+###
+
+def add_simple_presolver_options(parser, default_budget=0.05,
+        default_min_fast_solutions=0.5):
+    """ Add optional parameters controlling the simple presolver
+    """
+    parser.add_argument('--presolver-budget', help="The fraction of the "
+        "scenario cutoff time used for presolving", type=float,
+        default=default_budget)
+
+    parser.add_argument('--presolver-min-fast-solutions', help="The fraction "
+        "of instances which must be solved within the presolver budget to "
+        "consider the solver for use as a presolver", type=float,
+        default=default_min_fast_solutions)
+
+def validate_simple_presolver_options(args):
+    """ Ensure the presolver options are within valid bounds
+    """
+    math_utils.check_range(args.presolver_budget, 0, 1,
+        variable_name='--presolver-budget')
+
+    math_utils.check_range(args.presolver_min_fast_solutions, 0, 1,
+        variable_name='--presolver-min-fast-solutions')
+
+def add_enable_presolving_option(parser):
+    """ Add the --enable-presolving flag
+    """
+    parser.add_argument('--enable-presolving', help="If this flag is present, "
+        "then presolving will be enabled", action='store_true')
+
 
 ###
 # R

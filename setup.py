@@ -26,6 +26,7 @@ external_requirements = [
     'joblib',
     'matplotlib',
     'sklearn',
+    'mlxtend',
     'docopt',
     'tqdm',
     'seaborn',
