@@ -8,6 +8,10 @@ import mlxtend.feature_selection
 import networkx as nx
 import sklearn.pipeline
 import sklearn.preprocessing
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
+
 from sklearn.utils.validation import check_is_fitted
 
 from as_auto_sklearn.presolver_scheduler import PresolverScheduler
@@ -18,9 +22,10 @@ import misc.parallel as parallel
 import misc.utils as utils
 
 class ASaslEnsemble:
-    def __init__(self, args, solvers):
+    def __init__(self, args, solvers, use_random_forests=False):
         self.args = args
         self.solvers = solvers
+        self.use_random_forests = use_random_forests
         
     # train each of the regressors
     def _fit_regressor(self, solver):
@@ -30,7 +35,10 @@ class ASaslEnsemble:
         # we want to punish large errors, so use mse
         metric = autosklearn.metrics.mean_squared_error
         
-        model_fit = model.fit(self.X_train, y_train, metric=metric)
+        if self.use_random_forests:
+            model_fit = model.fit(self.X_train, y_train)
+        else:
+            model_fit = model.fit(self.X_train, y_train, metric=metric)
         return (solver, model_fit)
 
 
@@ -60,11 +68,19 @@ class ASaslEnsemble:
     def _fit_regressors(self):
         
         # create the regressors for each solver
-        self.solver_asl_regressors = {
-            solver: automl_utils.AutoSklearnWrapper(
-                estimator_named_step="regressor", args=self.args
-            ) for solver in self.solvers
-        }
+
+        if self.use_random_forests:
+            self.solver_asl_regressors = {
+                solver: RandomForestRegressor(
+                    n_estimators=100
+                ) for solver in self.solvers
+            }
+        else:
+            self.solver_asl_regressors = {
+                solver: automl_utils.AutoSklearnWrapper(
+                    estimator_named_step="regressor", args=self.args
+                ) for solver in self.solvers
+            }
 
         # fit the regressors
         ret = parallel.apply_parallel_iter(
@@ -76,35 +92,70 @@ class ASaslEnsemble:
         self.solver_asl_regressors_ = dict(ret)
 
         return self
-        
-    def _fit_stacking_model(self, metric=autosklearn.metrics.f1_micro):
-        
-        # use those to build the dataset for the stacking model
+
+    def _get_stacking_model_dataset_asl(self, X):
+
         X_stacking_train = pd.DataFrame()
         for solver in self.solvers:
             r = self.solver_asl_regressors_[solver]
-            mean, std = r.predict_dist(self.X_train)
+            mean, std = r.predict_dist(X)
             m = "{}_mean".format(solver)
             s = "{}_std".format(solver)
             X_stacking_train[m] = mean
             X_stacking_train[s] = std
 
-        X = [self.X_train, X_stacking_train]
-        self.X_stacking_train = np.concatenate(X, axis=1)
-    
+        X = [X, X_stacking_train]
+        X = np.concatenate(X, axis=1)
+        return X
+
+
+    def _get_stacking_model_dataset_rf(self, X):
+
+        X_stacking_train = pd.DataFrame()
+        for solver in self.solvers:
+            r = self.solver_asl_regressors_[solver]
+            mean = r.predict(self.X_train)
+            m = "{}_mean".format(solver)
+            X_stacking_train[m] = mean
+
+        X = [X, X_stacking_train]
+        X = np.concatenate(X, axis=1)
+        return X
+
+
+        
+    def _fit_stacking_model(self, metric=autosklearn.metrics.f1_micro):
+        
+        # use those to build the dataset for the stacking model
+        if self.use_random_forests:
+            self.X_stacking_train = self._get_stacking_model_dataset_rf(self.X_train)
+        else:
+            self.X_stacking_train = self._get_stacking_model_dataset_asl(self.X_train)
+            
         # build the multi-class output for the stacking model
         best_solvers = self.orig_y_train.idxmin(axis=1)
         self.y_stacking_train = self.le_.transform(best_solvers)
 
         # and fit
-        self.stacking_model = automl_utils.AutoSklearnWrapper(
-            estimator_named_step="classifer", args=self.args)
+        if self.use_random_forests:
+            self.stacking_model = RandomForestClassifier(
+                n_estimators=100
+            )
 
-        self.stacking_model_ = self.stacking_model.fit(
-            self.X_stacking_train,
-            self.y_stacking_train,
-            metric=metric
-        )
+            self.stacking_model_ = self.stacking_model.fit(
+                self.X_stacking_train,
+                self.y_stacking_train
+            )
+
+        else:
+            self.stacking_model = automl_utils.AutoSklearnWrapper(
+                estimator_named_step="classifer", args=self.args)
+
+            self.stacking_model_ = self.stacking_model.fit(
+                self.X_stacking_train,
+                self.y_stacking_train,
+                metric=metric
+            )
         
         return self
             
@@ -118,15 +169,13 @@ class ASaslEnsemble:
         
     def predict_proba(self, X_test):
         # add the stacking model features
-        X_stacking_test = pd.DataFrame()
-        for solver in self.solvers:
-            mean, std = self.solver_asl_regressors_[solver].predict_dist(X_test)
-            m = "{}_mean".format(solver)
-            s = "{}_std".format(solver)
-            X_stacking_test[m] = mean
-            X_stacking_test[s] = std
+        if self.use_random_forests:
+            X_stacking_test = self._get_stacking_model_dataset_rf(self.X_train)
+            y_proba_pred = self.stacking_model.predict_proba(X_stacking_test)
+            return y_proba_pred
 
-        X_stacking_test = np.concatenate([X_test, X_stacking_test], axis=1)
+        X_stacking_test = self._get_stacking_model_dataset_asl(self.X_train)
+
         
         (weights, pipelines) = self.stacking_model_.ensemble_
         estimators = self.stacking_model_.get_estimators()
@@ -159,9 +208,10 @@ class ASaslEnsemble:
         return y_pred
 
 class ASaslPipeline:
-    def __init__(self, args, feature_steps):
+    def __init__(self, args, feature_steps, use_random_forests=False):
         self.args = args
         self.feature_steps = feature_steps
+        self.use_random_forests = use_random_forests
 
     def fit(self, scenario):
         """ Fit the pipeline using the ASlibScenario
@@ -185,11 +235,12 @@ class ASaslPipeline:
 
         feature_selector = mlxtend.feature_selection.ColumnSelector(
             cols=self.feature_columns_)
-            
+
         nss = NaNStandardScaler()
         as_asl_ensemble = ASaslEnsemble(
             args=self.args,
-            solvers=scenario.algorithms
+            solvers=scenario.algorithms,
+            use_random_forests=self.use_random_forests
         )
         
         pipeline = [
@@ -267,8 +318,8 @@ class ASaslPipeline:
 
         # in order to ensure our schedule is valid, load all features
         # in topo order
-        feature_dependency_graph = automl_utils.extract_feature_step_dependency_graph(scenario)
-        feature_topo_order = nx.topological_sort(feature_dependency_graph)
+        #feature_dependency_graph = automl_utils.extract_feature_step_dependency_graph(scenario)
+        #feature_topo_order = nx.topological_sort(feature_dependency_graph)
 
         it = zip(choices, scenario.instances)
         schedules = {}
@@ -281,7 +332,8 @@ class ASaslPipeline:
 
             schedule = utils.remove_nones(
                 presolver_schedules[instance] +
-                feature_topo_order +
+                #feature_topo_order +
+                self.feature_steps +
                 solver_schedule
             )
 
