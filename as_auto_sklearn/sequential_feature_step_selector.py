@@ -1,6 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
+import joblib
 import numpy as np
 import mlxtend.feature_selection
 from sklearn.utils.validation import check_is_fitted
@@ -69,8 +70,7 @@ class SequentialFeatureStepSelector:
             pipeline_fit = pipeline.fit(scenario=training)
             
             # now, check the par10 both with and without presolving
-            schedules = pipeline_fit.create_solver_schedules(
-                testing, enable_presolving=False)
+            schedules = pipeline_fit.create_solver_schedules(testing)
             
             msg = "[SFSS]: length of schedules: {}".format(len(schedules))
             logger.debug(msg)
