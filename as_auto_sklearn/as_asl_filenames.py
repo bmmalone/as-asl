@@ -25,6 +25,51 @@ def _get_fold_str(fold=None):
     return fold_str
 
 ###
+# F
+###
+def get_feature_selector_filename(base_path, selector_type,
+        compression_type="gz", note=None):
+    """ Get the path to a file containing a fit feature selector
+
+    Parameters
+    ----------
+    base_path: path-like (e.g., a string)
+        The path to the base data directory
+
+    selector_type: string
+        The identifier for the type of selector (e.g., "rf-ensemble")
+
+    compression_type: string or None
+        The extension for the type of compression. Please see the joblib docs
+        for more details about supported compression types and extensions.
+
+        Use None for no compression.
+
+    note: string or None
+        Any additional note to include in the filename. This should probably
+        not contain spaces or special characters.
+
+    Returns
+    -------
+    selector_filename: string
+        The path to the selector file
+    """
+    
+    fname = [
+        "feature-selector.",
+        selector_type,
+        _get_note_str(note),
+        ".pkl",
+        _get_compression_str(compression_type)
+    ]
+
+    fname = ''.join(fname)
+    fname = os.path.join(base_path, fname)
+    return fname
+
+
+
+###
 # M
 ###
 def get_model_filename(base_path, model_type, fold=None,
@@ -39,10 +84,10 @@ def get_model_filename(base_path, model_type, fold=None,
     model_type: string
         The identifier for the type of model (e.g., "bo-baseline")
 
-    fold: int-like
+    fold: int-like or None
         The cross-validation fold
 
-    compression_type: string
+    compression_type: string or None
         The extension for the type of compression. Please see the joblib docs
         for more details about supported compression types and extensions.
 
@@ -54,8 +99,8 @@ def get_model_filename(base_path, model_type, fold=None,
 
     Returns
     -------
-    result_filename: string
-        The path to the result file
+    model_filename: string
+        The path to the model file
     """
 
     fname = [
