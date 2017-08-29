@@ -25,6 +25,8 @@ class Stats(object):
         self.solved = 0
         self.unsolvable = 0
         self.presolved_feats = 0
+        self.solver_times = 0
+        self.feature_times= 0
 
         self.runtime_cutoff = runtime_cutoff
         
@@ -72,6 +74,10 @@ class Stats(object):
             self.logger.info("PAR10: %.4f" % (par10 / n_samples))
             self.logger.info("Timeouts: %d / %d" % (timeouts, n_samples))
             self.logger.info("Presolved during feature computation: %d / %d" % (self.presolved_feats, n_samples))
+
+            self.logger.info("Solver time: %.4f" % (self.solver_times / n_samples))
+            self.logger.info("Feature time: %.4f" % (self.feature_times / n_samples))
+
             self.logger.info("Solved: %d / %d" % (self.solved, n_samples))
             self.logger.info("Unsolvable (%s): %d / %d" % 
                              (rm_string, self.unsolvable, n_samples+self.unsolvable))
@@ -88,6 +94,15 @@ class Stats(object):
             self.logger.debug("%s: %.2f" %(algo, n/(timeouts + self.solved)))
             
         return par10 / n_samples
+
+    def get_n_samples(self):
+        if self.runtime_cutoff:
+            timeouts = self.timeouts - self.unsolvable
+            n_samples = timeouts + self.solved
+        else:
+            n_samples = self.solved
+        return n_samples
+
 
     def merge(self, stat):
         '''
@@ -109,9 +124,30 @@ class Stats(object):
 
 class Validator(object):
 
-    def __init__(self):
+    def __init__(self, logging_level="DEBUG"):
         ''' Constructor '''
         self.logger = logging.getLogger("Validation")
+        self.logger.setLevel(logging_level)
+
+    def validate(self, schedules:dict, test_scenario:ASlibScenario, show:bool=True):
+        '''
+            validate selected schedules on test instances for runtime
+
+            Arguments
+            ---------
+            schedules: dict {instance name -> tuples [algo, bugdet]}
+                algorithm schedules per instance
+            test_scenario: ASlibScenario
+                ASlib scenario with test instances
+            show: bool
+                whether to print the statistics after calculating them
+        '''
+        if test_scenario.performance_type[0] == "runtime":
+            stat = self.validate_runtime(schedules, test_scenario, show)
+        else:
+            stat = self.validate_quality(schedules, test_scenario, show)
+        return stat
+
 
     def validate_runtime(self, schedules: dict, test_scenario: ASlibScenario, show:bool=True):
         '''
@@ -144,12 +180,14 @@ class Validator(object):
             self.logger.error("Missing predictions for %s" %(set(test_scenario.instances).difference(schedules.keys)))
             sys.exit(1)
 
-
-        for inst, schedule in schedules.items():
+        for inst in test_scenario.instances:
+            schedule = schedules[inst]
             self.logger.debug("Validate: %s on %s" % (schedule, inst))
 
             # update the oracle behavior
-            stat.oracle_par1 += test_scenario.performance_data.loc[inst].min()
+            oracle_par1 = test_scenario.performance_data.loc[inst].min()
+            stat.oracle_par1 += oracle_par1
+            self.logger.debug("Oracle performance: {}".format(oracle_par1))
 
             used_time = 0            
             for entry in schedule:
@@ -160,6 +198,7 @@ class Validator(object):
                         ftime = test_scenario.feature_cost_data[entry][inst]
                         self.logger.debug("Used Feature time: %f" % (ftime))
                         used_time += ftime
+                        stat.feature_times += ftime
                     solved = (test_scenario.feature_runstatus_data[entry][inst] == "presolved")
                 elif isinstance(entry,list): # algorithm
                     algo, budget = entry 
@@ -167,6 +206,8 @@ class Validator(object):
                     self.logger.debug("Alloted time %f of %s vs true time %f" %(budget, algo, time))
                     used_time += min(time, budget)
                     solved = (time <= budget) and test_scenario.runstatus_data[algo][inst] == "ok"
+
+                    stat.solver_times += used_time
 
                     # also keep track of how often we select each algorithm
                     stat.selection_freq[algo] += 1
@@ -178,7 +219,7 @@ class Validator(object):
                     stat.par1 += used_time
                     self.logger.debug("Solved after %f" %(used_time))
                     break
-                elif used_time > test_scenario.algorithm_cutoff_time:
+                elif used_time >= test_scenario.algorithm_cutoff_time:
                     stat.timeouts += 1
                     stat.par1 += test_scenario.algorithm_cutoff_time
                     self.logger.debug("Timeout after %f (< %f)" % (test_scenario.algorithm_cutoff_time, used_time))
@@ -221,7 +262,8 @@ class Validator(object):
             self.logger.error("Missing predictions for %s" %(set(test_scenario.instances).difference(schedules.keys)))
             sys.exit(1)
         
-        for inst, schedule in schedules.items():
+        for inst in test_scenario.instances:
+            schedule = schedules[inst]
 
             # update the oracle behavior
             stat.oracle_par1 += test_scenario.performance_data.loc[inst].min()
@@ -236,9 +278,41 @@ class Validator(object):
             self.logger.debug("Using %s on %s with performance %f" %(selected_algo, inst, perf))
             
             stat.par1 += perf
+            stat.par10 += perf
             stat.solved += 1
         
         if show:
             stat.show(remove_unsolvable=False)
         
         return stat
+
+    @classmethod
+    def get_par10_score(cls, schedules: dict, test_scenarios, show:bool=False):
+        """ Calculate the PAR10 score for the schedule on the scenario
+
+        Parameters
+        ---------
+        schedules: dict {instance name -> tuples [algo, bugdet]}
+            algorithm schedules per instance
+        test_scenario: ASlibScenario or a list of ASlibScenarios
+            ASlib scenario (or a list of them) with test instances
+        show: bool
+            whether to print the statistics after calculating them
+        """
+        import misc.utils as utils
+
+        test_scenarios = utils.wrap_in_list(test_scenarios)
+        all_stat = None
+
+        for test_scenario in test_scenarios:
+            validator = cls(logging_level='INFO')
+            stat = validator.validate(schedules, test_scenario, show)
+
+            if all_stat is None:
+                all_stat = stat
+            else:
+                all_stat.merge(stat)
+        
+        par10 = all_stat.par10 / all_stat.get_n_samples()
+        return par10
+
