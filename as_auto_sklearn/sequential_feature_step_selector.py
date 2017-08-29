@@ -156,7 +156,7 @@ class SequentialFeatureStepSelector:
         # make sure to use a copy
         self.remaining_feature_steps_ = list(scenario.feature_steps)
 
-        while len(self.cur_feature_steps_) <= self.max_feature_steps:
+        while len(self.cur_feature_steps_) < self.max_feature_steps:
             (best_feature_step, best_par10) = self._find_best_feature_step()
 
             if best_par10 > self.cur_par10_:
@@ -169,19 +169,29 @@ class SequentialFeatureStepSelector:
             
             t = (list(self.cur_feature_steps_), self.cur_par10_)
             self.trajectory_.append(t)
+
+
+        self.selected_features_ = automl_utils.extract_feature_names(
+            self.scenario, 
+            self.cur_feature_steps_
+        )
+
+        # we cannot keep the scenario around for pickling, so forget it
+        self.scenario = None
             
         return self
+
+    def get_selected_feature_steps(self):
+        """ Get the names of the selected feature steps
+        """
+        check_is_fitted(self, "cur_feature_steps_")
+        return self.cur_feature_steps_
 
     def get_selected_features(self):
         """ Get the names of the selected features based on the steps
         """
-        check_is_fitted(self, "cur_feature_steps_")
-        
-        selected_features = automl_utils.extract_feature_names(
-            self.scenario, 
-            self.cur_feature_steps_
-        )
-        return selected_features
+        check_is_fitted(self, "selected_features_")
+        return self.selected_features_
 
     
     def get_transformer(self):

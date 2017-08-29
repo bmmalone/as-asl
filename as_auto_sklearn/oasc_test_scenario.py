@@ -19,6 +19,8 @@ class OascTestScenario:
         scenario.read_description(fn=os.path.join(path,"description.txt"))
         scenario.read_feature_values(fn=os.path.join(path,"feature_values.arff"))
         scenario.read_feature_runstatus(fn=os.path.join(path,"feature_runstatus.arff"))
+
+        scenario.instances = scenario.feature_data.index
         
         self.scenario = scenario
 

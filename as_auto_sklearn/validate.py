@@ -124,7 +124,7 @@ class Stats(object):
 
 class Validator(object):
 
-    def __init__(self, logging_level="DEBUG"):
+    def __init__(self, logging_level="INFO"):
         ''' Constructor '''
         self.logger = logging.getLogger("Validation")
         self.logger.setLevel(logging_level)

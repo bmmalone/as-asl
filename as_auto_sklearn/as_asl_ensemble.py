@@ -17,6 +17,10 @@ from sklearn.ensemble import RandomForestRegressor
 
 from sklearn.utils.validation import check_is_fitted
 
+import as_auto_sklearn.as_asl_utils as as_asl_utils
+import as_auto_sklearn.as_asl_filenames as filenames
+from as_auto_sklearn.validate import Validator
+
 import misc.automl_utils as automl_utils
 from misc.nan_standard_scaler import NaNStandardScaler
 import misc.parallel as parallel
@@ -470,8 +474,17 @@ class ASaslScheduler:
     Presently, the actual GridSearchCV interface from sklearn is not supported.
     """
 
-    def __init__(self, feature_scheduler, presolver_scheduler=None):
+    def __init__(self, args, config, sfss=None, feature_scheduler=None, 
+            presolver_scheduler=None):
         """ Create the chained scheduler
+
+        Parameters
+        ----------
+        args: argparse.ArgumentParser
+
+        config: dict
+
+        sfss: SequentialFeatureStepSelector
 
         presolver_scheduler: PresolverScheduler
             The object responsible for determining presolving schedules. The
@@ -483,29 +496,112 @@ class ASaslScheduler:
             schedules. The parameters of the feature_scheduler are assumed
             to be fixed.
         """
-        self.presolver_scheduler = presolver_scheduler
-        if presolver_scheduler is None:
-            self.presolver_scheduler = PresolverScheduler()
 
+        self.args = args
+        self.config = config
+        self.sfss = sfss
+        self.presolver_scheduler = presolver_scheduler
         self.feature_scheduler = feature_scheduler
 
-    def fit(self, scenario):
-        """ Fit the presolver to the scenario
-        """
-        self.presolver_scheduler.fit(scenario)
+    def _fit_sfss(self, scenario):
+        from as_auto_sklearn.sequential_feature_step_selector import SequentialFeatureStepSelector
+        # first, select the feature steps
+        sfss = SequentialFeatureStepSelector(
+            self.args,
+            max_feature_steps=self.args.max_feature_steps
+        )
 
-    def set_params(self, **params):
-        """ Set the parameters of the presolver scheduler
-        """
+        sfss_fit = sfss.fit(scenario)
+
+        selector_type = "rf-ensemble"
+        selector_filename = filenames.get_feature_selector_filename(
+            self.config['base_path'],
+            selector_type,
+            scenario=scenario.scenario,
+            note=self.config.get('note')
+        )
+
+        sfss_fit.dump(selector_filename)
+        return sfss
+
+    def _fit_pipeline(self, scenario):
+        # second, train the "main" algorithm selector using the
+        # selected feature steps
+        pipeline = ASaslPipeline(
+            self.args,
+            feature_steps=self.sfss_.get_selected_feature_steps(),
+            features=self.sfss_.get_selected_features(),
+            use_random_forests=self.args.use_random_forests
+        )
+
+        pipeline_fit = pipeline.fit(scenario=scenario)
+
+        model_type = "as-asl-pipeline"
+        model_filename = filenames.get_model_filename(
+            self.config['base_path'],
+            model_type,
+            scenario=scenario.scenario,
+            note=self.config.get('note')    
+        )
+
+        pipeline_fit.dump(model_filename)
+        return pipeline_fit
+
+    def _evaluate_presolver_params(self, scenario, params):
         self.presolver_scheduler.set_params(**params)
+        
+        all_schedules = {}
+        test_scenarios = []
+
+        for fold in self.args.folds:
+            testing, training = scenario.get_split(fold)
+            scheduler_fit = self.presolver_scheduler.fit(training)
+
+            schedules_pred = self.create_schedules(testing)
+            all_schedules.update(schedules_pred)
+
+            test_scenarios.append(testing)
+            
+        par10 = Validator.get_par10_score(all_schedules, test_scenarios)
+        return par10
+
+    def _fit_presolver(self, scenario):
+        
+        presolver_grid = {
+            'budget': [0, 0.001, 0.01, 0.02, 0.05, 0.1],
+            'min_fast_solutions': [0.5, 0.75]
+        }
+
+        self.presolver_scheduler = PresolverScheduler()
+        self.presolver_scheduler_ = self.presolver_scheduler
+
+        best_par10 = np.inf
+        best_params = None
+        for params in utils.dict_product(presolver_grid):
+            par10 = self._evaluate_presolver_params(scenario, params)
+
+            if par10 < best_par10:
+                best_par10 = par10
+                best_params = params
+
+        self.presolver_scheduler.set_params(**best_params)
+        return self.presolver_scheduler
+
+    def fit(self, scenario):
+
+        self.sfss_ = self._fit_sfss(scenario)
+        self.pipeline_ = self._fit_pipeline(scenario)
+        self.presolver_scheduler_ = self._fit_presolver(scenario)
+
+        return self
 
     def create_schedules(self, scenario):
         """ Create the algorithm selection schedules for all instances in the
         scenario
         """
 
-        presolver_schedules = self.presolver_scheduler.create_presolver_schedule(scenario)
-        solver_schedules = self.feature_scheduler.create_solver_schedules(scenario)
+        presolver_schedules = self.presolver_scheduler_.create_presolver_schedule(scenario)
+        solver_schedules = self.pipeline_.create_solver_schedules(scenario)
 
         schedules = {}
 
@@ -519,4 +615,24 @@ class ASaslScheduler:
             schedules[instance] = schedule
 
         return schedules
+
+    def dump(self, filename):
+        """ A convenience wrapper around joblib.dump
+        """
+        joblib.dump(self, filename)
+
+    @classmethod
+    def load(cls, filename):
+        """ A convenience wrapper around joblib.load
+        """
+        pipeline = joblib.load(filename)
+
+        # and make sure we actually read the correct type of thing
+        if not isinstance(pipeline, cls):
+            msg = ("[as_asl_ensemble.load]: the object at {} is of type {}, "
+                "but expected type was: {}".format(filename, type(pipeline),
+                cls))
+            raise TypeError(msg)
+
+        return pipeline
 
