@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 import autosklearn.metrics
 
 import joblib
@@ -13,8 +16,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import RandomForestRegressor
 
 from sklearn.utils.validation import check_is_fitted
-
-from as_auto_sklearn.presolver_scheduler import PresolverScheduler
 
 import misc.automl_utils as automl_utils
 from misc.nan_standard_scaler import NaNStandardScaler
@@ -34,7 +35,18 @@ class ASaslEnsemble:
         
         # we want to punish large errors, so use mse
         metric = autosklearn.metrics.mean_squared_error
+
+        num_nan = np.isnan(self.X_train).sum()
+        num_inf = np.isinf(self.X_train).sum()
+
+        msg = ("[as_asl_ensemble._fit_regressor]: num_nan(X_train): {}".
+            format(num_nan))
+        logger.debug(msg)
         
+        msg = ("[as_asl_ensemble._fit_regressor]: num_inf(X_train): {}".
+            format(num_inf))
+        logger.debug(msg)
+
         if self.use_random_forests:
             model_fit = model.fit(self.X_train, y_train)
         else:
@@ -114,7 +126,7 @@ class ASaslEnsemble:
         X_stacking_train = pd.DataFrame()
         for solver in self.solvers:
             r = self.solver_asl_regressors_[solver]
-            mean = r.predict(self.X_train)
+            mean = r.predict(X)
             m = "{}_mean".format(solver)
             X_stacking_train[m] = mean
 
@@ -170,11 +182,11 @@ class ASaslEnsemble:
     def predict_proba(self, X_test):
         # add the stacking model features
         if self.use_random_forests:
-            X_stacking_test = self._get_stacking_model_dataset_rf(self.X_train)
+            X_stacking_test = self._get_stacking_model_dataset_rf(X_test)
             y_proba_pred = self.stacking_model.predict_proba(X_stacking_test)
             return y_proba_pred
 
-        X_stacking_test = self._get_stacking_model_dataset_asl(self.X_train)
+        X_stacking_test = self._get_stacking_model_dataset_asl(X_test)
 
         
         (weights, pipelines) = self.stacking_model_.ensemble_
@@ -208,8 +220,9 @@ class ASaslEnsemble:
         return y_pred
 
 class ASaslPipeline:
-    def __init__(self, args, feature_steps, use_random_forests=False):
+    def __init__(self, args, feature_steps=None, features=None, use_random_forests=False):
         self.args = args
+        self.features = features
         self.feature_steps = feature_steps
         self.use_random_forests = use_random_forests
 
@@ -217,21 +230,14 @@ class ASaslPipeline:
         """ Fit the pipeline using the ASlibScenario
         """
 
-        # first, select a presolver, if any
-        self.presolver_scheduler = PresolverScheduler(
-            budget=self.args.presolver_budget,
-            min_fast_solutions=self.args.presolver_min_fast_solutions
-        )
-        self.presolver_scheduler_ = self.presolver_scheduler.fit(scenario)
-
-        self.feature_names_ = automl_utils.extract_feature_names(
-            scenario, 
-            self.feature_steps
-        )
-        self.feature_columns_ = [
-            scenario.feature_data.columns.get_loc(c)
-                for c in self.feature_names_
-        ]
+        if self.features is None:
+            self.feature_columns_ = len(scenario.feature_data.columns)
+            self.feature_columns_ = np.arange(self.feature_columns_, dtype=int)
+        else:
+            self.feature_columns_ = [
+                scenario.feature_data.columns.get_loc(c)
+                    for c in self.features
+            ]
 
         feature_selector = mlxtend.feature_selection.ColumnSelector(
             cols=self.feature_columns_)
@@ -242,12 +248,20 @@ class ASaslPipeline:
             solvers=scenario.algorithms,
             use_random_forests=self.use_random_forests
         )
+
+        # if we are using random forests, then we must also impute
+        # missing values
+        imputer = None
+        if self.use_random_forests:
+            imputer = automl_utils.get_imputer("zero_fill")
+            imputer = ('imputer', imputer)
         
-        pipeline = [
+        pipeline = utils.remove_nones([
             ('feature_selector', feature_selector),
             ('nss', nss),
+            imputer,
             ('selector', as_asl_ensemble)
-        ]
+        ])
         
         self.pipeline = sklearn.pipeline.Pipeline(pipeline)
 
@@ -294,11 +308,11 @@ class ASaslPipeline:
         return y_transformed
 
             
-    def create_solver_schedules(self, scenario, enable_presolving=True):
+    def create_solver_schedules(self, scenario):
         """ Use the fit pipeline to create solver schedules for the scenario
         instances
         """
-        check_is_fitted(self, ["pipeline_", "presolver_scheduler_"])
+        check_is_fitted(self, ["pipeline_"])
 
         # currently, just take the predicted best solver
         X_test = scenario.feature_data
@@ -307,20 +321,10 @@ class ASaslPipeline:
         X_test = X_test.values
         y_pred = self.predict(X_test)
 
-        if enable_presolving:
-            presolver_schedules = self.presolver_scheduler_.create_presolver_schedule(scenario)
-        else:
-            presolver_schedules = {
-                instance: [None] for instance in scenario.instances
-            }
+        msg = "X_test.shape: {}. y_pred.shape: {}".format(X_test.shape, y_pred.shape)
+        logger.debug(msg)
 
         choices = self.inverse_transform(y_pred)
-
-        # in order to ensure our schedule is valid, load all features
-        # in topo order
-        #feature_dependency_graph = automl_utils.extract_feature_step_dependency_graph(scenario)
-        #feature_topo_order = nx.topological_sort(feature_dependency_graph)
-
         it = zip(choices, scenario.instances)
         schedules = {}
         
@@ -331,8 +335,6 @@ class ASaslPipeline:
                 solver_schedule = [(choice,999999999999)]
 
             schedule = utils.remove_nones(
-                presolver_schedules[instance] +
-                #feature_topo_order +
                 self.feature_steps +
                 solver_schedule
             )
@@ -361,9 +363,160 @@ class ASaslPipeline:
 
         return pipeline
 
+class PresolverScheduler:
+    """ Determine the presolving schedule for a dataset based
+    the solver runtimes from a training set. This class constructs
+    a static presolving schedule which does not depend on the instance
+    features.
+    
+    This class uses sklearn-like nomenclature for its methods, but
+    the semantics tend to be somewhat different.
+    """
+    def __init__(self, budget=0.1, min_fast_solutions=0.5):
+        """ Create a selector
+        
+        Parameters
+        ---------- 
+        budget: float between 0 and 1
+            The fraction of the scenario cutoff time used for presolving
+            
+        min_fast_solutions: float between 0 and 1
+            The fraction of instances which must be solved "fast" to select
+            a solver for presolving
+        """
+        self.budget = budget
+        self.min_fast_solutions = min_fast_solutions
+    
+    def fit(self, scenario):
+        """ Use the solver runtimes to construct a static presolver schedule
+        
+        Parameters
+        ----------
+        scenario: ASlibScenario
+            The scenario
+                    
+        Returns
+        -------
+        self
+        """
+        
+        # use a simple threshold to determine a "fast" solution
+        self.fast_cutoff_time_ = scenario.algorithm_cutoff_time * self.budget
+        self.fast_cutoff_count_ = len(scenario.instances) * self.min_fast_solutions
+        
+        
+        self.presolver_ = None
+        best_mean_fast_solution_time = np.inf
+
+        for solver in scenario.algorithms:
+            p = scenario.performance_data[solver]
+
+            m_fast_solutions = p < self.fast_cutoff_time_
+            num_fast_solutions = np.sum(m_fast_solutions)
+            mean_fast_solution_time = np.sum(p[m_fast_solutions]) / num_fast_solutions
+            
+            # check if this solver qualifies for use as a presolver
+            if num_fast_solutions > self.fast_cutoff_count_:
+                if mean_fast_solution_time < best_mean_fast_solution_time:
+                    best_mean_fast_solution_time = mean_fast_solution_time
+                    self.presolver_ = solver
+
+        return self
+
+    def get_params(self, deep=False):
+        params = {
+            'budget': self.budget,
+            'min_fast_solutions': self.min_fast_solutions
+        }
+        return params
+
+    def set_params(self, **params):
+        """ Set the  parameters of the presolver to the specified values
+        """
+        if 'budget' in params:
+            self.budget = params.pop('budget')
+
+        if 'min_fast_solutions' in params:
+            self.min_fast_solutions = params.pop('min_fast_solutions')
+                    
+    def create_presolver_schedule(self, scenario):
+        """ Create the presolver schedule for the given scenario
+        """
+        check_is_fitted(self, "presolver_")
+        
+        # check if we chose a presolver
+        p = None
+        if self.presolver_ is not None:
+            p = [self.presolver_, self.fast_cutoff_time_]
+            
+        # regardless, do the same thing for all instances
+        presolver_schedule = {
+            instance: [p] for instance in scenario.instances
+        }
+        
+        return presolver_schedule
 
 
+class ASaslScheduler:
+    """ This class chains a presolver scheduler with a feature-based scheduler
+    to build complete algorithm selection schedules.
 
+    When used in a grid search, this class assumes the feature-based scheduler
+    is fixed (that is, has already been optimized using an external process).
+    However, it does expose the parameters of the presolver. Thus, it is
+    appropriate for optimizing the the presolver parameters wrt a metric like
+    PAR10.
 
+    Presently, the actual GridSearchCV interface from sklearn is not supported.
+    """
 
+    def __init__(self, feature_scheduler, presolver_scheduler=None):
+        """ Create the chained scheduler
+
+        presolver_scheduler: PresolverScheduler
+            The object responsible for determining presolving schedules. The
+            parameters of the presolver_scheduler can be optimizes using
+            GridSearchCV-like search.
+
+        feature_scheduler: ASaslPipeline (or similar)
+            The object responsible for selecting feature sets and solver
+            schedules. The parameters of the feature_scheduler are assumed
+            to be fixed.
+        """
+        self.presolver_scheduler = presolver_scheduler
+        if presolver_scheduler is None:
+            self.presolver_scheduler = PresolverScheduler()
+
+        self.feature_scheduler = feature_scheduler
+
+    def fit(self, scenario):
+        """ Fit the presolver to the scenario
+        """
+        self.presolver_scheduler.fit(scenario)
+
+    def set_params(self, **params):
+        """ Set the parameters of the presolver scheduler
+        """
+        self.presolver_scheduler.set_params(**params)
+
+    def create_schedules(self, scenario):
+        """ Create the algorithm selection schedules for all instances in the
+        scenario
+        """
+
+        presolver_schedules = self.presolver_scheduler.create_presolver_schedule(scenario)
+        solver_schedules = self.feature_scheduler.create_solver_schedules(scenario)
+
+        schedules = {}
+
+        for instance in scenario.instances:
+            
+            schedule = utils.remove_nones(
+                presolver_schedules[instance] +
+                solver_schedules[instance]
+            )
+
+            schedules[instance] = schedule
+
+        return schedules
 
