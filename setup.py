@@ -16,7 +16,8 @@ console_scripts = [
     'validate-as-auto-sklearn=as_auto_sklearn.validate_as_auto_sklearn:main',
     'train-oasc-models=as_auto_sklearn.train_oasc_models:main',
     'evaluate-oasc-models=as_auto_sklearn.evaluate_oasc_models:main',
-    'process-oasc-scenario=as_auto_sklearn.process_oasc_scenario:main'
+    'process-oasc-scenario=as_auto_sklearn.process_oasc_scenario:main',
+    'distribute-process-oasc-scenario=as_auto_sklearn.distribute_process_oasc_scenario:main'
 ]
 
 external_requirements = [

@@ -15,6 +15,13 @@ def add_config(parser):
     """    
     parser.add_argument('config', help="The yaml configutration file")
 
+def get_config_options_string(args):
+    """ Create a string suitable for passing to another script with the
+    config options
+    """
+    s = args.config
+    return s
+
 def add_cv_options(parser, default_folds=[]):
     """ Add the optional cross-validation parameters
     """
@@ -34,6 +41,17 @@ def validate_folds_options(args):
         math_utils.check_range(f, 1, 10, variable_name="fold", 
             max_inclusive=True)
 
+def get_cv_options_string(args):
+    """ Create a string suitable for passing to another script with the
+    cross-validation options
+    """
+    args_dict = vars(args)
+
+    if ('folds' in args_dict) and (len(args.folds) > 0):
+        s = " ".join(str(f) for f in args.folds)
+        s = "--folds {}".format(s)
+
+    return s
 
 ###
 # N
@@ -44,6 +62,13 @@ def add_num_cpus(parser, default=1):
     """
     parser.add_argument('--num-cpus', help="The number of CPUs to use",
         type=int, default=default)
+
+def get_num_cpus_options_string(args):
+    args_dict = vars(args)
+
+    if 'num_cpus' in args_dict:
+        s = "--num-cpus {}".format(args.num_cpus)
+    return s
 
 ###
 # O
@@ -137,7 +162,22 @@ def add_scheduler_options(parser, default_max_feature_steps=0):
     scheduler_options.add_argument('--max-feature-steps', help="The maximum "
         "number of feature steps to select. If this number is less than 1, "
         "then no limit will be used.", type=int,
-        default=default_max_feature_steps) 
+        default=default_max_feature_steps)
+
+def get_scheduler_options_string(args):
+    args_dict = vars(args)
+
+    rf = ""
+    fs = ""
+
+    if args.use_random_forests:
+        rf = "--use-random-forests"
+
+    if 'max_feature_steps' in args_dict:
+        fs = "--max-feature-steps {}".format(args.max_feature_steps)
+
+    s = " ".join([rf, fs])
+    return s
 
 def add_seed(parser, default=8675309):
     """ Add a random seed parameter to the parser
