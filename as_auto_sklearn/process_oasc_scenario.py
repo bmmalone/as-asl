@@ -70,7 +70,7 @@ def main():
     scheduler_filename = filenames.get_model_filename(
         config['base_path'],
         model_type,
-        scenario=testing_scenario.scenario,
+        scenario=testing_scenario.scenario.scenario,
         note=config.get('note')
     )
 
