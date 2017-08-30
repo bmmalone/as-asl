@@ -60,9 +60,15 @@ def main():
 
     msg = "Writing the schedule to disk"
     logger.info(msg)
+
+
+    t = "asl.{}".format(testing_scenario.scenario.scenario)
+    if args.use_random_forests:
+        t = "rf.{}".format(testing_scenario.scenario.scenario)
+
     schedule_filename = filenames.get_schedule_filename(
         config['base_path'],
-        testing_scenario.scenario.scenario,
+        t,
         note=config.get('note')
     )
 

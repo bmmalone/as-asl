@@ -513,7 +513,11 @@ class ASaslScheduler:
 
         sfss_fit = sfss.fit(scenario)
 
-        selector_type = "rf-ensemble"
+        t = "asl."
+        if args.use_random_forests:
+            t = "rf."
+
+        selector_type = "{}rf-ensemble".format(t)
         selector_filename = filenames.get_feature_selector_filename(
             self.config['base_path'],
             selector_type,
@@ -536,7 +540,11 @@ class ASaslScheduler:
 
         pipeline_fit = pipeline.fit(scenario=scenario)
 
-        model_type = "as-asl-pipeline"
+        t = "asl."
+        if args.use_random_forests:
+            t = "rf."
+
+        model_type = "{}as-asl-pipeline".format(t)
         model_filename = filenames.get_model_filename(
             self.config['base_path'],
             model_type,
