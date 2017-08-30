@@ -514,7 +514,7 @@ class ASaslScheduler:
         sfss_fit = sfss.fit(scenario)
 
         t = "asl."
-        if args.use_random_forests:
+        if self.args.use_random_forests:
             t = "rf."
 
         selector_type = "{}rf-ensemble".format(t)
@@ -541,7 +541,7 @@ class ASaslScheduler:
         pipeline_fit = pipeline.fit(scenario=scenario)
 
         t = "asl."
-        if args.use_random_forests:
+        if self.args.use_random_forests:
             t = "rf."
 
         model_type = "{}as-asl-pipeline".format(t)
