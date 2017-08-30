@@ -334,12 +334,11 @@ class ASaslPipeline:
         
         for choice, instance in it:
             if scenario.performance_type[0] == "runtime":
-                solver_schedule = [[choice,scenario.algorithm_cutoff_time]]
-            elif testing.performance_type[0] == "solution_quality":
-                solver_schedule = [(choice,999999999999)]
+                solver_schedule = self.feature_steps +[[choice,scenario.algorithm_cutoff_time]]
+            elif scenario.performance_type[0] == "solution_quality":
+                solver_schedule = [[choice,999999999999]]
 
             schedule = utils.remove_nones(
-                self.feature_steps +
                 solver_schedule
             )
 
@@ -411,6 +410,14 @@ class PresolverScheduler:
         
         self.presolver_ = None
         best_mean_fast_solution_time = np.inf
+        
+        # we do not use presolving for solution_quality scenarios
+        if scenario.performance_type[0] == "solution_quality":
+            return
+
+        # also, we may specifically choose not to presolve
+        if self.budget == 0.0:
+            return
 
         for solver in scenario.algorithms:
             p = scenario.performance_data[solver]

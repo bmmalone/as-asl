@@ -22,6 +22,10 @@ def main():
     clu.add_config(parser)
     parser.add_argument('oasc_scenarios_dir')
 
+    parser.add_argument('--store-out', help="If this is option is given, then the "
+        "output of each of the distributed processes will be written here.",
+        default=None)
+
     clu.add_num_cpus(parser)
     clu.add_cv_options(parser)
     clu.add_scheduler_options(parser)

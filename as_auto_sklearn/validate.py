@@ -270,6 +270,7 @@ class Validator(object):
 
             if len(schedule) > 1:
                 self.logger.error("Validate does not support schedules for solution quality")
+                self.logger.error("scheduler: {}".format(schedule))
                 sys.exit(9)
                 
             selected_algo = schedule[0][0]

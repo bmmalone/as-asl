@@ -47,6 +47,7 @@ def get_cv_options_string(args):
     """
     args_dict = vars(args)
 
+    s = ""
     if ('folds' in args_dict) and (len(args.folds) > 0):
         s = " ".join(str(f) for f in args.folds)
         s = "--folds {}".format(s)
@@ -66,6 +67,7 @@ def add_num_cpus(parser, default=1):
 def get_num_cpus_options_string(args):
     args_dict = vars(args)
 
+    s = ""
     if 'num_cpus' in args_dict:
         s = "--num-cpus {}".format(args.num_cpus)
     return s

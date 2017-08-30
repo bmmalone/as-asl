@@ -3,6 +3,8 @@
 import argparse
 import json
 
+import numpy as np
+
 import misc.automl_utils as automl_utils
 
 import as_auto_sklearn.as_asl_command_line_utils as clu
@@ -44,6 +46,9 @@ def main():
     clu.validate_folds_options(args)
     if args.max_feature_steps < 1:
         args.max_feature_steps = np.inf
+
+    if len(args.folds) == 0:
+        args.folds = list(range(1,11))
 
     required_keys = ['base_path']
     config = as_asl_utils.load_config(args.config, required_keys)
