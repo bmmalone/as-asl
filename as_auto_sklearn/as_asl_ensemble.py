@@ -2,7 +2,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import autosklearn.metrics
-
+import copy
 import joblib
 import numpy as np
 import pandas as pd
@@ -293,7 +293,6 @@ class ASaslEnsemble:
 
         
         (weights, pipelines) = self.stacking_model_.ensemble_
-        estimators = self.stacking_model_.get_estimators()
 
         # sometimes, the estimators drop rare classes
         # I believe this is because they do not appear in all of the internal
@@ -428,13 +427,15 @@ class ASaslPipeline:
 
         # now, transform our data so we can send it to the ensemble
 
-        X_tr = p_fit.transform(X_train)
-        selector_refit = selector.refit(X_tr, y_train)
+        X_tr = p_fit.transform(self.X_train)
+        selector_refit = selector.refit(X_tr, self.y_train)
 
         # finally, reconstruct our refit pipeline
         p_fit = p_fit.steps
         p_fit.append(("selector", selector_refit))
         self.pipeline_ = sklearn.pipeline.Pipeline(p_fit)
+
+        return self
 
 
 
@@ -781,6 +782,8 @@ class ASaslScheduler:
 
         See ASaslEnsemble.refit and ASaslPipeline.refit for more details
         """
+
+        check_is_fitted(self, "pipeline_")
 
         self.pipeline_ = self.pipeline_.refit(scenario)
         self.presolver_scheduler_ = self._fit_presolver(scenario)
