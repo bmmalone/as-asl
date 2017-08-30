@@ -182,8 +182,107 @@ class ASaslEnsemble:
         self._fit_stacking_model(metric)
 
         return self
+
+    def _refit_asl_regressors(self, solver):
+
+        asl_wrapper = self.solver_asl_regressors_[solver]
+        X_train = self.X_train
+        y_train = self.y_train[solver]
+        
+        new_ensemble = automl_utils.retrain_asl_wrapper(
+            asl_wrapper,
+            X_train,
+            y_train
+        )
+
+        asl_wrapper.ensemble_ = new_ensemble
+
+    def _refit_asl_wrapper_ensemble(self):
+
+        # first, we need to refit each individual regressors
+        ret = parallel.apply_parallel_iter(
+            self.solvers,
+            self.args.num_cpus,
+            self._refit_asl_regressors
+        )
+
+        # the _refit_asl_regressors method has the side effect of updating
+        # the state of the asl_wrappers.... sorry pure functional folks.
+
+        # rebuild the stacking model
+        self.X_stacking_train = self._get_stacking_model_dataset_asl(self.X_train)
+        best_solvers = self.orig_y_train.idxmin(axis=1)
+        self.y_stacking_train = self.le_.transform(best_solvers)
+
+        new_ensemble = automl_utils.retrain_asl_wrapper(
+            self.stacking_model_,
+            self.X_stacking_train,
+            self.y_stacking_train
+        )
+
+        # and update the ensemble of the model
+        self.stacking_model_.ensemble_ = new_ensemble
+
+    def _refit_random_forest_ensemble(self):
+                
+        # we can just retrain these from scratch
+        ret = parallel.apply_parallel_iter(
+            self.solvers,
+            self.args.num_cpus,
+            self._fit_regressor
+        )
+
+        self.solver_asl_regressors_ = dict(ret)
+        
+        # now, build the stacking datasets using the new regressors
+        self.X_stacking_train = self._get_stacking_model_dataset_rf(self.X_train)
+
+        best_solvers = self.orig_y_train.idxmin(axis=1)
+        self.y_stacking_train = self.le_.transform(best_solvers)
+
+        # and actually update the stacking model
+        self.stacking_model_ = self.stacking_model.fit(
+            selector.X_stacking_train,
+            selector.y_stacking_train
+        )
+
+    def refit(self, X_train, y_train):
+        """ Update the parameters, but not hyperparameters, of the ensemble
+        members using the new training data.
+
+        N.B. This starts training from scratch. It does not use "warm starts".
+        Also, due to some technical details, some members of the ensembles fit
+        with auto-sklearn cannot be refit. Those are discarded.
+
+        Parameters
+        ----------
+        {X,y}_train: np or pandas data matrices
+            The new training data. These should *already be transformed*
+            using whatever preprocessing was used when the ensemble was first
+            fit.
+
+        Returns
+        -------
+        self
+        """
+
+        check_is_fitted(self, ["solver_asl_regressors_", "stacking_model_"])
+
+        # first, update our internal data structures
+        self._fit_init(X_train, y_train)
+
+        # and almost everything else is different, so branch
+        if self.args.use_random_forests:
+            self._refit_random_forest_ensemble()
+        else:
+            self._refit_asl_wrapper_ensemble()
+
+        return self
+
         
     def predict_proba(self, X_test):
+        check_is_fitted(self, ["solver_asl_regressors_", "stacking_model_"])
+
         # add the stacking model features
         if self.use_random_forests:
             X_stacking_test = self._get_stacking_model_dataset_rf(X_test)
@@ -215,6 +314,8 @@ class ASaslEnsemble:
     
     def predict(self, X_test):
         
+        check_is_fitted(self, ["solver_asl_regressors_", "stacking_model_"])
+
         # first, get the weighted predictions from each member of the ensemble
         y_pred = self.predict_proba(X_test)
 
@@ -275,6 +376,67 @@ class ASaslPipeline:
         self.pipeline_ = self.pipeline.fit(self.X_train, self.y_train)
 
         return self
+
+    def refit(self, scenario):
+        """ Update the parameters, but not hyperparameters, of the ensemble
+        and other pipeline members using the new training data.
+
+        N.B. This starts training from scratch. It does not use "warm starts".
+        Also, due to some technical details, some members of the ensembles fit
+        with auto-sklearn cannot be refit. Those are discarded.
+
+        Parameters
+        ----------
+        scenario: an ASlibScenario
+            Presumably, this is something like a (different) cv split of the
+            data originally used to train the pipeline.
+
+        Returns
+        -------
+        self
+        """
+
+        check_is_fitted(self, "pipeline_")
+
+        # overwrite whatever training data we had
+        self.X_train = scenario.feature_data.values
+        self.y_train = scenario.performance_data
+
+        
+        # we can just overwrite most of the existing pipeline
+        feature_selector = self.pipeline_.named_steps['feature_selector']
+        nss = self.pipeline_.named_steps['nss']
+        imputer = self.pipeline_.named_steps.get('imputer')
+        selector = self.pipeline_.named_steps['selector']
+
+        # none of the preprocessing has tunable hyperparameters
+        
+        # we do not always use an imputer, though
+        i = None
+        if imputer is not None:
+            i = ('imputer', imputer)
+            
+        p = utils.remove_nones([
+            ('feature_selector', feature_selector),
+            ('nss', copy.deepcopy(nss)),
+            i
+        ])
+        
+        # fit the first part of the pipeline to transform the training data
+        p = sklearn.pipeline.Pipeline(p)    
+        p_fit = p.fit(self.X_train, self.y_train)       
+
+        # now, transform our data so we can send it to the ensemble
+
+        X_tr = p_fit.transform(X_train)
+        selector_refit = selector.refit(X_tr, y_train)
+
+        # finally, reconstruct our refit pipeline
+        p_fit = p_fit.steps
+        p_fit.append(("selector", selector_refit))
+        self.pipeline_ = sklearn.pipeline.Pipeline(p_fit)
+
+
 
     def predict_proba(self, X_test):
         """ Use the fit pipeline to predict the likelihood that each solver is
