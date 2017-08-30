@@ -242,8 +242,8 @@ class ASaslEnsemble:
 
         # and actually update the stacking model
         self.stacking_model_ = self.stacking_model.fit(
-            selector.X_stacking_train,
-            selector.y_stacking_train
+            self.X_stacking_train,
+            self.y_stacking_train
         )
 
     def refit(self, X_train, y_train):
