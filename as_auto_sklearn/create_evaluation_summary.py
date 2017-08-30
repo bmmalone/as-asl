@@ -138,6 +138,8 @@ def main():
     clu.add_cv_options(parser)
     clu.add_num_cpus(parser)
 
+    automl_utils.add_blas_options(parser)
+
     logging_utils.add_logging_options(parser)
     args = parser.parse_args()
     logging_utils.update_logging(args)
@@ -149,6 +151,9 @@ def main():
 
     required_keys = ['base_path', 'training_scenarios_path']
     config = as_asl_utils.load_config(args.config, required_keys)
+
+    if automl_utils.spawn_for_blas(args):
+        return
 
     scenarios = utils.list_subdirs(config['training_scenarios_path'])
     use_random_forests = [False] #, True]
