@@ -59,6 +59,23 @@ def main():
     as_asl_scheduler = ASaslScheduler(args, config)
     as_asl_scheduler_fit = as_asl_scheduler.fit(training_scenario)
 
+    msg = "Writing the scheduler to disk"
+    logger.info(msg)
+
+    
+    model_type = "asl.scheduler"
+    if args.use_random_forests:
+        model_type = "rf.scheduler"
+
+    scheduler_filename = filenames.get_model_filename(
+        config['base_path'],
+        model_type,
+        scenario=testing_scenario.scenario,
+        note=config.get('note')
+    )
+
+    as_asl_scheduler_fit.dump(scheduler_filename)
+
     msg = "Creating a schedule for the test scenario"
     logger.info(msg)
     test_schedule = as_asl_scheduler.create_schedules(testing_scenario.scenario)
