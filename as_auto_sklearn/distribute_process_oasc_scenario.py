@@ -29,6 +29,7 @@ def main():
     automl_utils.add_automl_options(parser)
     automl_utils.add_blas_options(parser)
 
+    ssh_utils.add_ssh_options(parser)
 
     parser.add_argument('--dry-run', help="If this flag is given, then the "
         "commands will be printed to the screen, but not executed", 
