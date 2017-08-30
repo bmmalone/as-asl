@@ -772,6 +772,20 @@ class ASaslScheduler:
 
         return self
 
+    def refit(self, scenario):
+        """ Refit the scheduler on the new scenario
+
+        In particular, this updates the parameters (but not hyperparameters)
+        of the pipeline, as well as the presolver parameters. It does not
+        change the selected features.
+
+        See ASaslEnsemble.refit and ASaslPipeline.refit for more details
+        """
+
+        self.pipeline_ = self.pipeline_.refit(scenario)
+        self.presolver_scheduler_ = self._fit_presolver(scenario)
+        return self
+
     def create_schedules(self, scenario):
         """ Create the algorithm selection schedules for all instances in the
         scenario
