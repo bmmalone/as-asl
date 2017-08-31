@@ -8,13 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 The `aspeed` presolver is used by 
 [AutoFolio](https://github.com/mlindauer/AutoFolio) to improve algorithm
-selection behavior; it can be used by `as-auto-sklearn` in a straight-forward
+selection behavior; it can be used by `as-asl` in a straight-forward
 manner to improve algorithm selection behavior.
 
-## In progress - [1.1.0]
+## In progress - [1.1.1]
 
-The 1.1.0 release will ensure prediction behavior matches that of the
-`bn-portfolio` code used in the paper. The new features will include:
+The 1.1.1 release will ensure prediction behavior matches that of the
+`bn-portfolio` code used in the Machine Learning paper. The new features will
+include:
 
 * Distribute learning across a cluster using password-less SSH (based on public
   keys)
@@ -22,6 +23,29 @@ The 1.1.0 release will ensure prediction behavior matches that of the
 Additionally, the release will ensure predictions do not differ "substantially"
 from those in the paper. Clearly, this is subjective; nevertheless, the decision
 to call the milestone "reached" will be made in good faith.
+
+## [1.1.0] - 2017-08-31
+
+This release is used in the [OASC 2017](http://www.coseal.net/open-algorithm-selection-challenge-2017-oasc/).
+It represents a substantial update to the code base. In particular, significant
+updates include:
+
+* Automatic feature set selection based on a greedy, forward search
+
+* Stacking model-based algorithm selection. Individual models are now trained
+    for each solver, and the predictions from those models are fed into a second
+    classifier which selects the single best solver.
+    
+* Presolver selection based on a simple grid search
+
+* The package has been renamed from `as-auto-sklearn` to `as-asl`.
+
+### Removed
+
+* The old training and testing scripts have been removed. They were not really
+    compatible with much of the rest of the algorithm selection community (e.g.,
+    did not produce solver schedules, no support for feature set tuning, did not
+    include a presolver, etc.).
 
 ## [1.0.1] - 2017-03-13
 

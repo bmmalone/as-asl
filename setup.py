@@ -11,9 +11,6 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 console_scripts = [
-    'train-as-auto-sklearn=as_auto_sklearn.train_as_auto_sklearn:main',
-    'test-as-auto-sklearn=as_auto_sklearn.test_as_auto_sklearn:main',
-    'validate-as-auto-sklearn=as_auto_sklearn.validate_as_auto_sklearn:main',
     'train-oasc-models=as_auto_sklearn.train_oasc_models:main',
     'evaluate-oasc-models=as_auto_sklearn.evaluate_oasc_models:main',
     'process-oasc-scenario=as_auto_sklearn.process_oasc_scenario:main',
@@ -76,14 +73,19 @@ def readme():
     with open('README.md') as f:
         return f.read()
 
+def description():
+    description = ("This project incorporates the auto-sklearn toolkit (`asl`) "
+        "into a solver runtime prediction framework. The predictions are then "
+        "passed to a second classification model which yields a solution to "
+        "the algorithm selection problem (`as`).")
+    return description
+
 setup(name='as_auto_sklearn',
         version='1.0.1',
-        description="This project incorporates the auto-sklearn toolkit into "
-            "a solver runtime prediction framework. The predictions directly "
-            "yield a solution to the algorithm selection problem.",
+        description=description(),
         long_description=readme(),
         keywords="runtime prediction algorithm selection",
-        url="",
+        url="https://github.com/bmmalone/as-asl",
         author="Brandon Malone",
         author_email="bmmalone@gmail.com",
         license='MIT',
