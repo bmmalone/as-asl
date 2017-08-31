@@ -80,8 +80,8 @@ def description():
         "the algorithm selection problem (`as`).")
     return description
 
-setup(name='as_auto_sklearn',
-        version='1.0.1',
+setup(name='as_asl',
+        version='1.1.0',
         description=description(),
         long_description=readme(),
         keywords="runtime prediction algorithm selection",

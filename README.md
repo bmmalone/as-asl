@@ -28,9 +28,14 @@ An example (complete) config file:
 base_path: /prj/oasc2017
 ```
 
+### Training models with `auto-sklearn`
 
-**Training models with `auto-sklearn`**
+**Short test run**
+```
+process-oasc-scenario oasc.yaml /mldb/oasc_scenarios/train/Bado/ /mldb/oasc_scenarios/test/Bado/ --total-training-time 30 --num-cpus 3 --logging-level INFO --max-feature-steps 1
+```
 
+**Command for OASC-like run**
 ```
 process-oasc-scenario oasc.yaml /path/to/oasc_scenarios/train/Bado/ /path/to/oasc_scenarios/test/Bado/ --total-training-time 600 --num-cpus 8 --logging-level INFO
 ```
@@ -41,7 +46,10 @@ then uses that scheduler to create solving schedules for the test set. The
 seconds) allocated to `auto-sklearn` for each internal model.
 
 This script also performs feature set selection and determines a presolving
-schedule. Typical problem sets for OASC take about an hour or two with 8 CPUs
+schedule. The `--max-feature-steps` can be given to limit the number of feature
+steps considered in the search. 
+
+Typical problem sets for OASC take about an hour or two with 8 CPUs
 when 10 minutes are used for each model.
 
 This script also accepts other optional parameters controlling the behavior of
@@ -53,7 +61,7 @@ The `--help` flag can be given to see all options and their default values.
 The schedule for the test instances is written to: `<base_path>/schedule.asl.<scenario_name>.json`.
 The learned scheduler is written to: `<base_path>/model.asl.scheduler.<scenario_name>.pkl.gz`
 
-**Training models with random forests**
+### Training models with random forests
 
 ```
 process-oasc-scenario oasc.yaml /path/to/oasc_scenarios/train/Bado/ /path/to/oasc_scenarios/test/Bado/ --use-random-forests --num-cpus 8 --logging-level INFO
