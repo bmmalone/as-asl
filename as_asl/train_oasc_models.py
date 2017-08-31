@@ -5,10 +5,10 @@ import argparse
 import misc.automl_utils as automl_utils
 import misc.parallel as parallel
 
-import as_auto_sklearn.as_asl_command_line_utils as clu
-import as_auto_sklearn.as_asl_filenames as filenames
-import as_auto_sklearn.as_asl_utils as as_asl_utils
-from as_auto_sklearn.as_asl_ensemble import ASaslPipeline
+import as_asl.as_asl_command_line_utils as clu
+import as_asl.as_asl_filenames as filenames
+import as_asl.as_asl_utils as as_asl_utils
+from as_asl.as_asl_ensemble import ASaslPipeline
 
 import logging
 import misc.logging_utils as logging_utils

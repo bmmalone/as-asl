@@ -9,12 +9,12 @@ import pandas as pd
 import misc.automl_utils as automl_utils
 import misc.parallel as parallel
 
-import as_auto_sklearn.as_asl_command_line_utils as clu
-import as_auto_sklearn.as_asl_filenames as filenames
-import as_auto_sklearn.as_asl_utils as as_asl_utils
+import as_asl.as_asl_command_line_utils as clu
+import as_asl.as_asl_filenames as filenames
+import as_asl.as_asl_utils as as_asl_utils
 
-from as_auto_sklearn.as_asl_ensemble import ASaslScheduler
-from as_auto_sklearn.validate import Validator
+from as_asl.as_asl_ensemble import ASaslScheduler
+from as_asl.validate import Validator
 
 import misc.pandas_utils as pd_utils
 import misc.utils as utils

@@ -7,14 +7,14 @@ import numpy as np
 
 import misc.automl_utils as automl_utils
 
-import as_auto_sklearn.as_asl_command_line_utils as clu
-import as_auto_sklearn.as_asl_utils as as_asl_utils
-import as_auto_sklearn.as_asl_filenames as filenames
-from as_auto_sklearn.oasc_test_scenario import OascTestScenario
+import as_asl.as_asl_command_line_utils as clu
+import as_asl.as_asl_utils as as_asl_utils
+import as_asl.as_asl_filenames as filenames
+from as_asl.oasc_test_scenario import OascTestScenario
 
-from as_auto_sklearn.as_asl_ensemble import ASaslScheduler
+from as_asl.as_asl_ensemble import ASaslScheduler
 
-from as_auto_sklearn.validate import Validator
+from as_asl.validate import Validator
 
 import logging
 import misc.logging_utils as logging_utils

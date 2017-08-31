@@ -6,8 +6,8 @@ import numpy as np
 import mlxtend.feature_selection
 from sklearn.utils.validation import check_is_fitted
 
-from as_auto_sklearn.as_asl_ensemble import ASaslPipeline
-from as_auto_sklearn.validate import Validator
+from as_asl.as_asl_ensemble import ASaslPipeline
+from as_asl.validate import Validator
 
 import misc.automl_utils as automl_utils
 

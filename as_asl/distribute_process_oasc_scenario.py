@@ -8,7 +8,7 @@ import misc.shell_utils as shell_utils
 import misc.ssh_utils as ssh_utils
 import misc.utils as utils
 
-import as_auto_sklearn.as_asl_command_line_utils as clu
+import as_asl.as_asl_command_line_utils as clu
 
 import logging
 import misc.logging_utils as logging_utils

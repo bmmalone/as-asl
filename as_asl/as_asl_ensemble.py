@@ -17,9 +17,9 @@ from sklearn.ensemble import RandomForestRegressor
 
 from sklearn.utils.validation import check_is_fitted
 
-import as_auto_sklearn.as_asl_utils as as_asl_utils
-import as_auto_sklearn.as_asl_filenames as filenames
-from as_auto_sklearn.validate import Validator
+import as_asl.as_asl_utils as as_asl_utils
+import as_asl.as_asl_filenames as filenames
+from as_asl.validate import Validator
 
 import misc.automl_utils as automl_utils
 from misc.nan_standard_scaler import NaNStandardScaler
@@ -674,7 +674,7 @@ class ASaslScheduler:
         self.feature_scheduler = feature_scheduler
 
     def _fit_sfss(self, scenario):
-        from as_auto_sklearn.sequential_feature_step_selector import SequentialFeatureStepSelector
+        from as_asl.sequential_feature_step_selector import SequentialFeatureStepSelector
         # first, select the feature steps
         sfss = SequentialFeatureStepSelector(
             self.args,
