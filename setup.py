@@ -11,11 +11,11 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 console_scripts = [
-    'train-oasc-models=as_auto_sklearn.train_oasc_models:main',
-    'evaluate-oasc-models=as_auto_sklearn.evaluate_oasc_models:main',
-    'process-oasc-scenario=as_auto_sklearn.process_oasc_scenario:main',
-    'distribute-process-oasc-scenario=as_auto_sklearn.distribute_process_oasc_scenario:main',
-    'create-evaluation-summary=as_auto_sklearn.create_evaluation_summary:main'
+    'train-oasc-models=as_asl.train_oasc_models:main',
+    'evaluate-oasc-models=as_asl.evaluate_oasc_models:main',
+    'process-oasc-scenario=as_asl.process_oasc_scenario:main',
+    'distribute-process-oasc-scenario=as_asl.distribute_process_oasc_scenario:main',
+    'create-evaluation-summary=as_asl.create_evaluation_summary:main'
 ]
 
 external_requirements = [
@@ -30,9 +30,9 @@ external_requirements = [
     'docopt',
     'tqdm',
     'seaborn',
-    'misc', # handled by requirements.txt now
+    'misc', # handled by requirements.txt 
     'auto-sklearn', # handled by requirements.txt
-    'autofolio'
+    'aslib_scenario' # handled by requirements.txt
 ]
 
 def _post_install(self):
