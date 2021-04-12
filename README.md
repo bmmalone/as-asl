@@ -1,5 +1,11 @@
 # `as-asl`
 
+### Deprecated
+
+This project is no longer maintained. However, please feel free to contact me if you have questions about the associated paper or believe parts of the source code may be of use to you.
+
+## Overview
+
 This project incorporates the auto-sklearn toolkit (`asl`) into a solver runtime 
 prediction framework. The predictions are then passed to a second classification
 model which yields a solution to the algorithm selection problem (`as`).
